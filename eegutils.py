@@ -19,18 +19,13 @@
 """
 This module contains functions to process electroencephalographic
 recordings.
-
- Examples
- --------
- >>> 
-
 """
 from __future__ import division
 import copy, numpy
-from numpy import abs, array, convolve, zeros
+from numpy import abs, arange, array, convolve, ceil, zeros
+from numpy.fft import fft
 from scipy import signal
-from scipy.signal import firwin2
-from utils import*
+from scipy.signal import firwin2, blackman, hamming, hanning, bartlett
 import matplotlib.pyplot as plt
 import scipy.stats
 from pandas import DataFrame
@@ -39,6 +34,84 @@ try:
 except ImportError:
     pass
 import ctypes
+
+def extract_event_table(trig_chan, null_trig=0):
+    """
+    Extract the event table from the channel containing the trigger codes.
+    """
+    trigs = trig_chan[trig_chan!=null_trig]
+    trigs_idx = numpy.where((trig_chan!=null_trig))[0]
+
+    return trigs, trigs_idx
+
+def remove_spurious_triggers(rec_triggers, sent_triggers, null_trig):
+    """
+    Remove spurious trigger codes
+
+    Parameters
+    ----------
+    rec_triggers : array of int
+        
+    sent_triggers : array of floats
+        Array containing the list of triggers that were sent.
+    null_trig : int
+        The code representing no event.
+
+    Returns
+    -------
+    trigs :  array of int
+
+    cnds_trigs_idx: array of int
+
+    res_info: dict
+    
+    Examples
+    --------
+    >>> 
+    ... 
+    >>> 
+    ... 
+    >>> 
+    """
+    cnds_trigs = rec_triggers[rec_triggers!=null_trig]
+    cnds_trigs_idx = numpy.where((rec_triggers!=null_trig))[0]
+    trigs_to_discard = []; skip = 0
+    for i in range(len(sent_triggers)):
+        if (i+skip) > (len(cnds_trigs)-1):
+            print('Breaking for')
+            break
+        if sent_triggers[i] != cnds_trigs[i+skip]:
+            trigs_to_discard.append(i+skip)
+            alignment_found = False
+            while alignment_found == False:
+                skip = skip+1
+                if (i+skip) > (len(cnds_trigs)-1):
+                    print('Breaking while')
+                    break
+                if(sent_triggers[i] != cnds_trigs[i+skip]):
+                    trigs_to_discard.append(i+skip)
+                else:
+                    alignment_found = True
+
+    for i in range(len(trigs_to_discard)):
+        rec_triggers[cnds_trigs_idx[trigs_to_discard[i]]] = null_trig
+  
+
+    cnds_trigs = rec_triggers[rec_triggers!=null_trig]
+    cnds_trigs_idx = numpy.where(rec_triggers!=null_trig)[0]
+    cnds_trigs = cnds_trigs[0:len(sent_triggers)]
+    cnds_trigs_idx = cnds_trigs_idx[0:len(sent_triggers)]
+    if len(numpy.where((cnds_trigs == sent_triggers) == False)[0]) > 0:
+        match_found = False
+    else:
+        match_found = True
+
+    res_info = {}
+    res_info['match'] = match_found
+    res_info['len_sent'] = len(sent_triggers)
+    res_info['len_matching'] = len(cnds_trigs)
+    return rec_triggers, cnds_trigs_idx, res_info
+
 
 def reref_cnt(rec=None, channels=None, ref_channel=None):
     """
@@ -73,6 +146,18 @@ def reref_cnt(rec=None, channels=None, ref_channel=None):
     
 
 def segment_cnt(rec=None, trigs=None, epochStart=None, epochEnd=None, eventsList=None, sampRate=None):
+    """
+    Segment a continuous recording into epochs.
+
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     if eventsList == None:
         eventsList = numpy.unique(trigs)
 
@@ -102,6 +187,17 @@ def segment_cnt(rec=None, trigs=None, epochStart=None, epochEnd=None, eventsList
     return segs, nSegs
 
 def segment_cnt_evt_tab(rec=None, trigs=None, trigs_pos=None, epochStart=None, epochEnd=None, eventsList=None, sampRate=None):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     if eventsList == None:
         eventsList = numpy.unique(trigs)
 
@@ -156,6 +252,17 @@ def baseline_correct(rec, bsStart, preDur, sampRate):
 
 
 def find_artefact_thresh(rec=None, thresh_lower=[-100], thresh_higher=[100], channels=None):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     eventList = list(rec.keys())
     segs_to_reject = {}
     for i in range(len(eventList)):
@@ -174,6 +281,17 @@ def find_artefact_thresh(rec=None, thresh_lower=[-100], thresh_higher=[100], cha
 
 
 def remove_artefact(rec, to_remove):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     eventList = list(rec.keys())
     for code in eventList:
         currRem = list(to_remove[str(code)])
@@ -185,6 +303,17 @@ def remove_artefact(rec, to_remove):
     return rec
 
 def get_average(rec=None):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     eventList = list(rec.keys())
     ave = {}
     nSegs = {}
@@ -198,6 +327,17 @@ def get_average(rec=None):
     return ave, nSegs
 
 def average_averages(ave_list=None, nSegments=None):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     eventList = list(ave_list[0].keys())
     nSegsSum = {}
     weightedAve = {}
@@ -259,6 +399,17 @@ def chain_segments(rec, n_chunks, samp_rate, start=None, end=None, baseline_dur=
 
 
 def get_noise_sidebands(components, nCmpSide, nExcludeSide, fftArray):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     #components: a list containing the indexes of the target components
     #nCompSide: number of components used for each side band
     #nExcludeSide: number of components adjacent to to the target components to exclude
@@ -343,6 +494,17 @@ def detrend_segmentsed(rec):
 
 
 def filter_segmented(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     
     eventList = list(rec.keys())
 
@@ -391,6 +553,17 @@ def filter_segmented(rec, channels, samp_rate, filtertype, ntaps, cutoffs, trans
     return(rec)
         
 def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
        
     if filtertype == "lowpass":
         f1 = cutoffs[0] * (1-transition_width)
@@ -431,6 +604,17 @@ def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, tran
 
 
 def read_biosig(fName):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     HDR = biosig.constructHDR(0,0)
     HDR = biosig.sopen(fName, 'r', HDR)
     data = biosig.sread(0, HDR.NRec, HDR)
@@ -461,6 +645,17 @@ def read_biosig(fName):
     return data, array(codes), array(pos)
         
 def getFRatios(ffts, compIdx, nSideComp, nExcludedComp):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     cnds = ffts.keys()
     fftVals = {}
     fRatio = {}
@@ -512,6 +707,17 @@ def getFRatios2(ffts, compIdx, nSideComp, nExcludedComp, other_exclude):
     return fftVals, fRatio
 
 def saveFRatios(fName, subj, fRatio, fftVals, cnds_trigs, cndsLabels, nCleanByBlock, nRawByBlock):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     #cnds = list(fRatio.keys())
     
     nRaw = {}
@@ -550,6 +756,17 @@ def saveFRatios(fName, subj, fRatio, fftVals, cnds_trigs, cndsLabels, nCleanByBl
     datsFrame.to_csv(fName, sep=";")
 
 def save_chained(din, d1, data_chan, datastring, refstring):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     cnds = d1.keys()
     din[datastring+refstring] = {}
     for cnd in cnds:
@@ -564,6 +781,17 @@ def save_chained(din, d1, data_chan, datastring, refstring):
 ##     return cmb
 
 def combine_chained(dList):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
     cnds = dList[0].keys()
     cmb = {}
     for cnd in cnds:
@@ -575,3 +803,208 @@ def combine_chained(dList):
         cmb[cnd] = cmb[cnd] / len(dList)
             
     return cmb
+
+
+
+
+
+
+
+
+#############
+def nextpow2(x):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    out = int(ceil(log2(x)))
+    return out
+
+def getFFT(sig, sampFreq, window, poweroftwo):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    n = len(sig)
+    if poweroftwo == True:
+        nfft = 2**nextpow2(n)
+    else:
+        nfft = n
+    if window != 'none':
+        if window == 'hamming':
+             w = hamming(n)
+        elif window == 'hanning':
+             w = hanning(n)
+        elif window == 'blackman':
+             w = blackman(n)
+        elif window == 'bartlett':
+             w = bartlett(n)
+        sig = sig*w
+        
+    p = fft(sig, nfft) # take the fourier transform 
+    nUniquePts = ceil((nfft+1)/2.0)
+    p = p[0:nUniquePts]
+    p = abs(p)
+    p = p / sampFreq  # scale by the number of points so that
+    # the magnitude does not depend on the length 
+    # of the signal or on its sampling frequency  
+    #p = p**2  # square it to get the power 
+
+    # multiply by two (see technical document for details)
+    # odd nfft excludes Nyquist point
+    if nfft % 2 > 0: # we've got odd number of points fft
+         p[1:len(p)] = p[1:len(p)] * 2
+    else:
+         p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
+
+    freqArray = arange(0, nUniquePts, 1.0) * (sampFreq / nfft);
+    x = {'freqArray': freqArray, 'mag':p}
+    return x
+
+
+def getSpectrum(sig, sampFreq, window, poweroftwo):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    n = len(sig)
+    if poweroftwo == True:
+        nfft = 2**nextpow2(n)
+    else:
+        nfft = n
+    if window != 'none':
+        if window == 'hamming':
+             w = hamming(n)
+        elif window == 'hanning':
+             w = hanning(n)
+        elif window == 'blackman':
+             w = blackman(n)
+        elif window == 'bartlett':
+             w = bartlett(n)
+        sig = sig*w
+        
+    p = fft(sig, nfft) # take the fourier transform 
+    nUniquePts = ceil((nfft+1)/2.0)
+    p = p[0:nUniquePts]
+    p = abs(p)
+    p = p / sampFreq  # scale by the number of points so that
+    # the magnitude does not depend on the length 
+    # of the signal or on its sampling frequency  
+    p = p**2  # square it to get the power 
+
+    # multiply by two (see technical document for details)
+    # odd nfft excludes Nyquist point
+    if nfft % 2 > 0: # we've got odd number of points fft
+         p[1:len(p)] = p[1:len(p)] * 2
+    else:
+         p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
+
+    freqArray = arange(0, nUniquePts, 1.0) * (sampFreq / nfft);
+    x = {'freqArray': freqArray, 'mag':p}
+    return x
+
+
+def fir2Filt(f1, f2, f3, f4, snd, fs, ntaps):
+    """
+    Filter signal with a fir2 filter.
+
+    This function designs and applies a fir2 filter to a sound.
+    The frequency response of the ideal filter will transition
+    from 0 to 1 between 'f1' and 'f2', and from 1 to zero
+    between 'f3' and 'f4'. The frequencies must be given in
+    increasing order.
+
+    Parameters
+    ----------
+    f1 : float
+        Frequency in hertz of the point at which the transition
+        for the low-frequency cutoff ends. 
+    f2 : float
+        Frequency in hertz of the point at which the transition
+        for the low-frequency cutoff starts.
+    f3 : float
+        Frequency in hertz of the point at which the transition
+        for the high-frequency cutoff starts.
+    f4 : float
+        Frequency in hertz of the point at which the transition
+        for the high-frequency cutoff ends. 
+    snd : array of floats
+        The sound to be filtered.
+    fs : int
+        Sampling frequency of 'snd'.
+
+    Returns
+    -------
+    snd : 2-dimensional array of floats
+
+    Notes
+    -------
+    If 'f1' and 'f2' are zero the filter will be lowpass.
+    If 'f3' and 'f4' are equal to or greater than the nyquist
+    frequency (fs/2) the filter will be highpass.
+    In the other cases the filter will be bandpass.
+
+    The order of the filter (number of taps) is fixed at 256.
+    This function uses internally 'scipy.signal.firwin2'.
+       
+    Examples
+    --------
+    >>> noise = broadbandNoise(spectrumLevel=40, duration=180, ramp=10,
+    ...     channel='Both', fs=48000, maxLevel=100)
+    >>> lpNoise = fir2Filt(f1=0, f2=0, f3=1000, f4=1200, 
+    ...     snd=noise, fs=48000) #lowpass filter
+    >>> hpNoise = fir2Filt(f1=0, f2=0, f3=24000, f4=26000, 
+    ...     snd=noise, fs=48000) #highpass filter
+    >>> bpNoise = fir2Filt(f1=400, f2=600, f3=4000, f4=4400, 
+    ...     snd=noise, fs=48000) #bandpass filter
+    """
+
+    f1 = (f1 * 2) / fs
+    f2 = (f2 * 2) / fs
+    f3 = (f3 * 2) / fs
+    f4 = (f4 * 2) / fs
+
+
+    if f2 == 0: #low pass
+        #print('lowpass')
+        f = [0, f3, f4, 1]
+        m = [1, 1, 0.00003, 0]
+        
+    elif f3 < 1: #bandpass
+        #print('bandpass')
+        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
+        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
+        
+    else:
+        #print('highpass')
+        f = [0, f1, f2, 0.999999, 1] #high pass
+        m = [0, 0.00003, 1, 1, 0]
+        
+        
+    b = firwin2 (ntaps,f,m);
+    x = copy.copy(snd)
+    x = convolve(snd, b, 1)
+    #x[:, 1] = convolve(snd[:,1], b, 1)
+    
+    return x
