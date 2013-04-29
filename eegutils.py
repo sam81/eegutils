@@ -35,282 +35,18 @@ except ImportError:
     pass
 import ctypes
 
-def extract_event_table(trig_chan, null_trig=0):
+def average_epochs(rec):
     """
-    Extract the event table from the channel containing the trigger codes.
-    """
-    trigs = trig_chan[trig_chan!=null_trig]
-    trigs_idx = numpy.where((trig_chan!=null_trig))[0]
-
-    return trigs, trigs_idx
-
-def remove_spurious_triggers(rec_triggers, sent_triggers, null_trig):
-    """
-    Remove spurious trigger codes
-
+    Average the epochs of a segmented recording.
     Parameters
     ----------
-    rec_triggers : array of int
-        
-    sent_triggers : array of floats
-        Array containing the list of triggers that were sent.
-    null_trig : int
-        The code representing no event.
-
-    Returns
-    -------
-    trigs :  array of int
-
-    cnds_trigs_idx: array of int
-
-    res_info: dict
-    
-    Examples
-    --------
-    >>> 
-    ... 
-    >>> 
-    ... 
-    >>> 
-    """
-    cnds_trigs = rec_triggers[rec_triggers!=null_trig]
-    cnds_trigs_idx = numpy.where((rec_triggers!=null_trig))[0]
-    trigs_to_discard = []; skip = 0
-    for i in range(len(sent_triggers)):
-        if (i+skip) > (len(cnds_trigs)-1):
-            print('Breaking for')
-            break
-        if sent_triggers[i] != cnds_trigs[i+skip]:
-            trigs_to_discard.append(i+skip)
-            alignment_found = False
-            while alignment_found == False:
-                skip = skip+1
-                if (i+skip) > (len(cnds_trigs)-1):
-                    print('Breaking while')
-                    break
-                if(sent_triggers[i] != cnds_trigs[i+skip]):
-                    trigs_to_discard.append(i+skip)
-                else:
-                    alignment_found = True
-
-    for i in range(len(trigs_to_discard)):
-        rec_triggers[cnds_trigs_idx[trigs_to_discard[i]]] = null_trig
-  
-
-    cnds_trigs = rec_triggers[rec_triggers!=null_trig]
-    cnds_trigs_idx = numpy.where(rec_triggers!=null_trig)[0]
-    cnds_trigs = cnds_trigs[0:len(sent_triggers)]
-    cnds_trigs_idx = cnds_trigs_idx[0:len(sent_triggers)]
-    if len(numpy.where((cnds_trigs == sent_triggers) == False)[0]) > 0:
-        match_found = False
-    else:
-        match_found = True
-
-    res_info = {}
-    res_info['match'] = match_found
-    res_info['len_sent'] = len(sent_triggers)
-    res_info['len_matching'] = len(cnds_trigs)
-    return rec_triggers, cnds_trigs_idx, res_info
-
-
-def reref_cnt(rec=None, channels=None, ref_channel=None):
-    """
-    Rereference channels in a continuous recording.
-
-    Parameters
-    ----------
-    rec : 
+    rec : dict where each element is a 3D array with dimensions (nChannels x nSamples x nEpochs)
         Recording
-    channels : list of ints
-        Channels to be rereferenced
-    ref_channel: int
-        The reference channel
-
-    Returns
-    -------
-    rec : an array of floats with dimenions nChannels X nDataPoints
-        
-    Examples
-    --------
-    >>> reref_cnt(rec=dats, channels=[1, 2, 3], ref_channel=4)
-    """
-
-    nChannels = rec.shape[0]
-    if channels == None:
-        channels = list(range(nChannels))
-    for i in range(nChannels):
-        if i in channels and i != ref_channel:
-            rec[i,:] = rec[i,:] - rec[ref_channel,:]
-    rec[ref_channel,:] = 0
-    return rec
-    
-
-def segment_cnt(rec=None, trigs=None, epochStart=None, epochEnd=None, eventsList=None, sampRate=None):
-    """
-    Segment a continuous recording into epochs.
-
-    Parameters
-    ----------
-
     Returns
     ----------
-
-    Examples
-    ----------
-    """
-    if eventsList == None:
-        eventsList = numpy.unique(trigs)
-
-    epochStartSample = int(round(epochStart*sampRate))
-    epochEndSample = int(round(epochEnd*sampRate))
-    #print("Epoch start sample", epochStartSample)
-    #print("Epoch end sample", epochEndSample)
-    #add line to check start and end are within bounds
-    segs = {}
-    for i in range(len(eventsList)):
-        idx = numpy.where(trigs == eventsList[i])[0]
-        segs[str(eventsList[i])] = []
-        for j in range(len(idx)):
-            thisStartPnt = (idx[j]+epochStartSample)
-            thisStopPnt = (idx[j]+epochEndSample)
-            if thisStartPnt < 0 or thisStopPnt > rec.shape[1]:
-                if thisStartPnt < 0:
-                    print(idx[j], "Epoch starts before start of recording. Skipping")
-                if thisStopPnt > rec.shape[1]:
-                    print(idx[j], "Epoch ends after end of recording. Skipping")
-            else:
-                segs[str(eventsList[i])].append(rec[:, thisStartPnt:thisStopPnt])
-
-    nSegs = {}
-    for i in range(len(eventsList)): #count
-            nSegs[str(eventsList[i])] = len(segs[str(eventsList[i])])
-    return segs, nSegs
-
-def segment_cnt_evt_tab(rec=None, trigs=None, trigs_pos=None, epochStart=None, epochEnd=None, eventsList=None, sampRate=None):
-    """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-    Examples
-    ----------
-    """
-    if eventsList == None:
-        eventsList = numpy.unique(trigs)
-
-    epochStartSample = int(round(epochStart*sampRate))
-    epochEndSample = int(round(epochEnd*sampRate))
-    #print("Epoch start sample", epochStartSample)
-    #print("Epoch end sample", epochEndSample)
-    #add line to check start and end are within bounds
-    segs = {}
-    for i in range(len(eventsList)):
-        idx = trigs_pos[numpy.where(trigs == eventsList[i])[0]]
-        segs[str(eventsList[i])] = []
-        for j in range(len(idx)):
-            thisStartPnt = (idx[j]+epochStartSample)
-            thisStopPnt = (idx[j]+epochEndSample)
-            if thisStartPnt < 0 or thisStopPnt > rec.shape[1]:
-                if thisStartPnt < 0:
-                    print(idx[j], "Epoch starts before start of recording. Skipping")
-                if thisStopPnt > rec.shape[1]:
-                    print(idx[j], "Epoch ends after end of recording. Skipping")
-            else:
-                segs[str(eventsList[i])].append(rec[:, thisStartPnt:thisStopPnt])
-
-    nSegs = {}
-    for i in range(len(eventsList)): #count
-            nSegs[str(eventsList[i])] = len(segs[str(eventsList[i])])
-    return segs, nSegs
-
-def merge_triggers_cnt(trig_array=None, trig_list=None, new_trig=None):
-    """
-    take one or more triggers in trig_list, and substitute them with new_trig
-    """
-    for trig in trig_list:
-        trig_array[numpy.where(trig_array==trig)] = new_trig
-    return trig_array
-
-def baseline_correct(rec, bsStart, preDur, sampRate):
-    """
-    preDur:  duration of recording before experimental event
-    bsDur: duration of the baseline, it cannot be greater than preDur
-    """
-    eventList = list(rec.keys())
-    epochStartSample = int(round(preDur*sampRate))
-    bsStartSample = int(epochStartSample - abs(round(bsStart*sampRate)))
-   
-    for i in range(len(eventList)): #for each event
-        for j in range(len(rec[str(eventList[i])])): #for each epoch
-            for k in range(rec[str(eventList[i])][j].shape[0]): #for each electrode
-                thisBaseline = numpy.mean(rec[str(eventList[i])][j][k,bsStartSample:epochStartSample])
-                rec[str(eventList[i])][j][k,:] = rec[str(eventList[i])][j][k,:] - thisBaseline
-    return rec
-
-
-def find_artefact_thresh(rec=None, thresh_lower=[-100], thresh_higher=[100], channels=None):
-    """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-    Examples
-    ----------
-    """
-    eventList = list(rec.keys())
-    segs_to_reject = {}
-    for i in range(len(eventList)):
-        segs_to_reject[str(eventList[i])] = [] #list to keep the indices of the epochs to delete
-        for j in range(len(rec[str(eventList[i])])): #for each epoch
-            for k in range(rec[str(eventList[i])][j].shape[0]): #for each channel
-                if k in channels:
-                    if (max(rec[str(eventList[i])][j][k,:]) > thresh_higher[channels.index(k)] or min(rec[str(eventList[i])][j][k,:]) < thresh_lower[channels.index(k)]) == True:
-                        segs_to_reject[str(eventList[i])].append(j)
-                
-            
-    for i in range(len(eventList)):
-        segs_to_reject[str(eventList[i])] = numpy.unique(segs_to_reject[str(eventList[i])])
-
-    return segs_to_reject
-
-
-def remove_artefact(rec, to_remove):
-    """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-    Examples
-    ----------
-    """
-    eventList = list(rec.keys())
-    for code in eventList:
-        currRem = list(to_remove[str(code)])
-        currRem.reverse()
-        if currRem != None:
-            for item in currRem:
-                rec[str(code)].pop(item)
-    
-    return rec
-
-def get_average(rec=None):
-    """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
+    ave : dict where each element is a 2D array with dimensions (nChannels x nSamples)
+    nSegs : dict of ints
+        The number of epochs averaged for each condition
     Examples
     ----------
     """
@@ -318,20 +54,21 @@ def get_average(rec=None):
     ave = {}
     nSegs = {}
     for code in eventList:
-        ave[code] = numpy.zeros(rec[code][0].shape)
-        for item in rec[code]:
-            ave[code] = ave[code] + item
-        nSegs[code] = len(rec[code])
-        ave[code] = ave[code] / nSegs[code]
-        
+        nSegs[code] = rec[code].shape[2]
+        ave[code] = numpy.mean(rec[code], axis=2)
+
     return ave, nSegs
 
-def average_averages(ave_list=None, nSegments=None):
+def average_averages(ave_list, nSegments):
     """
+    Perform a weighted average of a list of averages. The weight of
+    each average in the list is determined by the number of segments
+    from which it was obtained.
     
     Parameters
     ----------
-
+    ave_list
+    nSegments
     Returns
     ----------
 
@@ -352,6 +89,22 @@ def average_averages(ave_list=None, nSegments=None):
            weightedAve[event] = weightedAve[event] + ave_list[i][event] * (nSegments[i][event]/nSegsSum[event])
     
     return weightedAve, nSegsSum
+
+def baseline_correct(rec, bsStart, preDur, sampRate):
+    """
+    preDur:  duration of recording before experimental event
+    bsDur: duration of the baseline, it cannot be greater than preDur
+    """
+    eventList = list(rec.keys())
+    epochStartSample = int(round(preDur*sampRate))
+    bsStartSample = int(epochStartSample - abs(round(bsStart*sampRate)))
+   
+    for i in range(len(eventList)): #for each event
+        for j in range(rec[str(eventList[i])].shape[2]): #for each epoch
+            for k in range(rec[str(eventList[i])].shape[0]): #for each electrode
+                thisBaseline = numpy.mean(rec[str(eventList[i])][k,bsStartSample:epochStartSample,j])
+                rec[str(eventList[i])][k,:,j] = rec[str(eventList[i])][k,:,j] - thisBaseline
+    return rec
     
 def chain_segments(rec, n_chunks, samp_rate, start=None, end=None, baseline_dur=0):
     """
@@ -395,7 +148,277 @@ def chain_segments(rec, n_chunks, samp_rate, start=None, end=None, baseline_dur=
             idxChunkEnd = idxChunkStart + chunk_size
             eegChained[currCode][:,idxChunkStart:idxChunkEnd] = eegChained[currCode][:,idxChunkStart:idxChunkEnd] / nReps[currCode][p]
         fromeegChainedAve[currCode] = fromeegChainedAve[currCode] / sum(nReps[currCode])
-    return eegChained#, fromeegChainedAve
+    return eegChained
+
+def combine_chained(dList):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    cnds = dList[0].keys()
+    cmb = {}
+    for cnd in cnds:
+        for i in range(len(dList)):
+            if i == 0:
+                cmb[cnd] = dList[0][cnd]
+            else:
+                cmb[cnd] = cmb[cnd] + dList[i][cnd]
+        cmb[cnd] = cmb[cnd] / len(dList)
+            
+    return cmb
+
+def detrend(rec):
+    nChannels = rec.shape[0]
+    for i in range(nChannels):
+        rec[i,:] = rec[i,:] - numpy.mean(rec[i,:])
+    return rec
+def detrend_segmentsed(rec):
+    eventList = list(rec.keys())
+    for ev in eventList:
+        for i in range(len(rec[ev])):
+            for j in range(rec[ev][0].shape[0]):
+                rec[ev][i][j,:] = rec[ev][i][j,:] - numpy.mean(rec[ev][i][j,:])
+    return(rec)
+
+def extract_event_table(trig_chan, null_trig=0):
+    """
+    Extract the event table from the channel containing the trigger codes.
+
+    Parameters
+    ----------
+    trig_chan : array of ints
+        The trigger channel.
+
+    Returns
+    -------
+    event_table :  dict with the following keys
+       - trigs: array of ints
+          The list of triggers in the EEG recording.
+       - trigs_pos : array of ints
+          The indexes of the triggers in the EEG recording.
+    
+    Examples
+    --------
+    >>> 
+    ... 
+    >>> 
+    ... 
+    >>> 
+    """
+    trigs = trig_chan[trig_chan!=null_trig]
+    trigs_idx = numpy.where((trig_chan!=null_trig))[0]
+
+    evtTable = {}
+    evtTable['trigs'] = trigs
+    evtTable['trigs_idx'] = trigs_idx
+    
+    return evtTable
+
+def filter_segmented(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    
+    eventList = list(rec.keys())
+
+    nChannels = rec[eventList[0]][0].shape[0]
+    if channels == None or len(channels) == 0:
+        channels = list(range(nChannels))
+   
+    if filtertype == "lowpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f = [0, f3, f4, 1]
+        m = [1, 1, 0.00003, 0]
+    elif filtertype == "highpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f = [0, f1, f2, 0.999999, 1] #high pass
+        m = [0, 0.00003, 1, 1, 0]
+    elif filtertype == "bandpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f3 = cutoffs[1]
+        f4 = cutoffs[1] * (1+transition_width)
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f3 = (f3*2) / samp_rate
+        f4 = (f4*2) / samp_rate
+        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
+        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
+    b = firwin2 (ntaps,f,m);
+    ## w,h = signal.freqz(b,1)
+    ## h_dB = 20 * log10 (abs(h))
+    ## plt.plot((w/max(w))*(samp_rate/2),h_dB)
+    ## plt.show()
+
+    
+    for ev in eventList:
+        for i in range(rec[ev].shape[2]): #for each epoch
+            for j in range(rec[ev].shape[0]): #for each channel
+                if j in channels:
+                    rec[ev][j,:,i] = convolve(rec[ev][j,:,i], b, 'same')
+                    rec[ev][j,:,i] = convolve(rec[ev][j,:,i][::-1], b, 'same')[::-1]
+    return(rec)
+        
+def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+       
+    if filtertype == "lowpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f = [0, f3, f4, 1]
+        m = [1, 1, 0.00003, 0]
+    elif filtertype == "highpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f = [0, f1, f2, 0.999999, 1] #high pass
+        m = [0, 0.00003, 1, 1, 0]
+    elif filtertype == "bandpass":
+        f1 = cutoffs[0] * (1-transition_width)
+        f2 = cutoffs[0]
+        f3 = cutoffs[1]
+        f4 = cutoffs[1] * (1+transition_width)
+        f1 = (f1*2) / samp_rate
+        f2 = (f2*2) / samp_rate
+        f3 = (f3*2) / samp_rate
+        f4 = (f4*2) / samp_rate
+        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
+        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
+    b = firwin2 (ntaps,f,m);
+
+    nChannels = rec.shape[0]
+    if channels == None:
+        channels = list(range(nChannels))
+   
+    for i in range(nChannels):
+        if i in channels:
+            rec[i,:] = convolve(rec[i,:], b, "same")
+            rec[i,:] = convolve(rec[i,:][::-1], b,1)[::-"same"]
+    return(rec)
+
+def find_artefact_thresh(rec=None, thresh_lower=[-100], thresh_higher=[100], channels=None):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    eventList = list(rec.keys())
+    segs_to_reject = {}
+    for i in range(len(eventList)):
+        segs_to_reject[str(eventList[i])] = [] #list to keep the indices of the epochs to delete
+        for j in range(rec[str(eventList[i])].shape[2]): #for each epoch
+            for k in range(rec[str(eventList[i])].shape[0]): #for each channel
+                if k in channels:
+                    if (max(rec[str(eventList[i])][k,:,j]) > thresh_higher[channels.index(k)] or min(rec[str(eventList[i])][k,:,j]) < thresh_lower[channels.index(k)]) == True:
+                        segs_to_reject[str(eventList[i])].append(j)
+                
+            
+    for i in range(len(eventList)): #segment may be flagged by detection in more than one channel
+        segs_to_reject[str(eventList[i])] = numpy.unique(segs_to_reject[str(eventList[i])])
+
+    return segs_to_reject
+
+def getFRatios(ffts, compIdx, nSideComp, nExcludedComp):
+    """
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
+    """
+    cnds = ffts.keys()
+    fftVals = {}
+    fRatio = {}
+    dfNum = 2
+    dfDenom = 2*(nSideComp*2) -1
+    for cnd in cnds:
+        fRatio[cnd] = {}
+        fftVals[cnd] = {}
+        fRatio[cnd]['F'] = []
+        fRatio[cnd]['pval'] = []
+        fftVals[cnd]['sigPow'] = []
+        fftVals[cnd]['noisePow'] = []
+        for c in range(len(compIdx)):
+            sideBands = get_noise_sidebands(compIdx, nSideComp, nExcludedComp, ffts[cnd]['mag'])
+            noisePow = mean(sideBands[c])
+            sigPow = ffts[cnd]['mag'][compIdx[c]]
+            thisF =  sigPow/ noisePow
+            fftVals[cnd]['sigPow'].append(sigPow)
+            fftVals[cnd]['noisePow'].append(noisePow)
+            fRatio[cnd]['F'].append(thisF)
+            fRatio[cnd]['pval'].append(scipy.stats.f.pdf(thisF, dfNum, dfDenom))
+    return fftVals, fRatio
+
+def getFRatios2(ffts, compIdx, nSideComp, nExcludedComp, other_exclude):
+    """
+    Add excluded components
+    """
+    cnds = ffts.keys()
+    fftVals = {}
+    fRatio = {}
+    dfNum = 2
+    dfDenom = 2*(nSideComp*2) -1
+    for cnd in cnds:
+        fRatio[cnd] = {}
+        fftVals[cnd] = {}
+        fRatio[cnd]['F'] = []
+        fRatio[cnd]['pval'] = []
+        fftVals[cnd]['sigPow'] = []
+        fftVals[cnd]['noisePow'] = []
+        for c in range(len(compIdx)):
+            sideBands = get_noise_sidebands2(compIdx, nSideComp, nExcludedComp, ffts[cnd]['mag'], other_exclude)
+            noisePow = mean(sideBands[c])
+            sigPow = ffts[cnd]['mag'][compIdx[c]]
+            thisF =  sigPow/ noisePow
+            fftVals[cnd]['sigPow'].append(sigPow)
+            fftVals[cnd]['noisePow'].append(noisePow)
+            fRatio[cnd]['F'].append(thisF)
+            fRatio[cnd]['pval'].append(scipy.stats.f.pdf(thisF, dfNum, dfDenom))
+    return fftVals, fRatio
 
 
 def get_noise_sidebands(components, nCmpSide, nExcludeSide, fftArray):
@@ -477,131 +500,15 @@ def get_noise_sidebands2(components, nCmpSide, nExcludeSide, fftArray, other_exc
         noiseBands.append(loSide+hiSide)
         
     return noiseBands
-                
-def detrend(rec):
-    nChannels = rec.shape[0]
-    for i in range(nChannels):
-        rec[i,:] = rec[i,:] - numpy.mean(rec[i,:])
-    return rec
-def detrend_segmentsed(rec):
-    eventList = list(rec.keys())
-    for ev in eventList:
-        for i in range(len(rec[ev])):
-            for j in range(rec[ev][0].shape[0]):
-                rec[ev][i][j,:] = rec[ev][i][j,:] - numpy.mean(rec[ev][i][j,:])
-    return(rec)
 
 
-
-def filter_segmented(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
+def merge_triggers_cnt(trig_array=None, trig_list=None, new_trig=None):
     """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-    Examples
-    ----------
+    take one or more triggers in trig_list, and substitute them with new_trig
     """
-    
-    eventList = list(rec.keys())
-
-    nChannels = rec[eventList[0]][0].shape[0]
-    if channels == None or len(channels) == 0:
-        channels = list(range(nChannels))
-   
-    if filtertype == "lowpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f = [0, f3, f4, 1]
-        m = [1, 1, 0.00003, 0]
-    elif filtertype == "highpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f = [0, f1, f2, 0.999999, 1] #high pass
-        m = [0, 0.00003, 1, 1, 0]
-    elif filtertype == "bandpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f3 = cutoffs[1]
-        f4 = cutoffs[1] * (1+transition_width)
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f3 = (f3*2) / samp_rate
-        f4 = (f4*2) / samp_rate
-        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
-        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
-    b = firwin2 (ntaps,f,m);
-    ## w,h = signal.freqz(b,1)
-    ## h_dB = 20 * log10 (abs(h))
-    ## plt.plot((w/max(w))*(samp_rate/2),h_dB)
-    ## plt.show()
-
-    
-    for ev in eventList:
-        for i in range(len(rec[ev])):
-            for j in range(rec[ev][0].shape[0]):
-                if j in channels:
-                    rec[ev][i][j,:] = convolve(rec[ev][i][j,:], b, 'same')
-                    rec[ev][i][j,:] = convolve(rec[ev][i][j,:][::-1], b, 'same')[::-1]
-    return(rec)
-        
-def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
-    """
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-    Examples
-    ----------
-    """
-       
-    if filtertype == "lowpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f = [0, f3, f4, 1]
-        m = [1, 1, 0.00003, 0]
-    elif filtertype == "highpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f = [0, f1, f2, 0.999999, 1] #high pass
-        m = [0, 0.00003, 1, 1, 0]
-    elif filtertype == "bandpass":
-        f1 = cutoffs[0] * (1-transition_width)
-        f2 = cutoffs[0]
-        f3 = cutoffs[1]
-        f4 = cutoffs[1] * (1+transition_width)
-        f1 = (f1*2) / samp_rate
-        f2 = (f2*2) / samp_rate
-        f3 = (f3*2) / samp_rate
-        f4 = (f4*2) / samp_rate
-        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
-        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
-    b = firwin2 (ntaps,f,m);
-
-    nChannels = rec.shape[0]
-    if channels == None:
-        channels = list(range(nChannels))
-   
-    for i in range(nChannels):
-        if i in channels:
-            rec[i,:] = convolve(rec[i,:], b, "same")
-            rec[i,:] = convolve(rec[i,:][::-1], b,1)[::-"same"]
-    return(rec)
-
+    for trig in trig_list:
+        trig_array[numpy.where(trig_array==trig)] = new_trig
+    return trig_array
 
 def read_biosig(fName):
     """
@@ -643,8 +550,8 @@ def read_biosig(fName):
     biosig.destructHDR(HDR)
 
     return data, array(codes), array(pos)
-        
-def getFRatios(ffts, compIdx, nSideComp, nExcludedComp):
+
+def remove_artefact(rec, to_remove):
     """
     
     Parameters
@@ -656,55 +563,123 @@ def getFRatios(ffts, compIdx, nSideComp, nExcludedComp):
     Examples
     ----------
     """
-    cnds = ffts.keys()
-    fftVals = {}
-    fRatio = {}
-    dfNum = 2
-    dfDenom = 2*(nSideComp*2) -1
-    for cnd in cnds:
-        fRatio[cnd] = {}
-        fftVals[cnd] = {}
-        fRatio[cnd]['F'] = []
-        fRatio[cnd]['pval'] = []
-        fftVals[cnd]['sigPow'] = []
-        fftVals[cnd]['noisePow'] = []
-        for c in range(len(compIdx)):
-            sideBands = get_noise_sidebands(compIdx, nSideComp, nExcludedComp, ffts[cnd]['mag'])
-            noisePow = mean(sideBands[c])
-            sigPow = ffts[cnd]['mag'][compIdx[c]]
-            thisF =  sigPow/ noisePow
-            fftVals[cnd]['sigPow'].append(sigPow)
-            fftVals[cnd]['noisePow'].append(noisePow)
-            fRatio[cnd]['F'].append(thisF)
-            fRatio[cnd]['pval'].append(scipy.stats.f.pdf(thisF, dfNum, dfDenom))
-    return fftVals, fRatio
+    eventList = list(rec.keys())
+    for code in eventList:
+        rec[code] = numpy.delete(rec[code], to_remove[code], axis=2)
+    
+    return rec
 
-def getFRatios2(ffts, compIdx, nSideComp, nExcludedComp, other_exclude):
+def remove_spurious_triggers(event_table, sent_trigs):
     """
-    Add excluded components
+    Remove spurious trigger codes.
+
+    Parameters
+    ----------
+    event_table :  dict with the following keys
+       - trigs: array of ints
+           The list of triggers in the EEG recording.
+       - trigs_pos : array of ints
+           The indexes of trigs in the EEG recording.
+    sent_triggers : array of floats
+        Array containing the list of triggers that were sent to the EEG recording equipment.
+
+    Returns
+    -------
+    event_table :  dict with the following keys
+       - trigs: array of ints
+          List of valid triggers.
+       - trigs_pos : array of ints
+          The indexes of trigs in the EEG recording
+
+    res_info: dict with the following keys:
+       - len_matching: int
+          Number of matching elements in the event table and sent_trigs
+       - len_sent: int
+          Length of sent_trigs
+       - match : boolean
+          True if a sequence matching the sent_trigs sequence is found in the event_table
+    
+    Examples
+    --------
+    >>> 
+    ... 
+    >>> 
+    ... 
+    >>> 
     """
-    cnds = ffts.keys()
-    fftVals = {}
-    fRatio = {}
-    dfNum = 2
-    dfDenom = 2*(nSideComp*2) -1
-    for cnd in cnds:
-        fRatio[cnd] = {}
-        fftVals[cnd] = {}
-        fRatio[cnd]['F'] = []
-        fRatio[cnd]['pval'] = []
-        fftVals[cnd]['sigPow'] = []
-        fftVals[cnd]['noisePow'] = []
-        for c in range(len(compIdx)):
-            sideBands = get_noise_sidebands2(compIdx, nSideComp, nExcludedComp, ffts[cnd]['mag'], other_exclude)
-            noisePow = mean(sideBands[c])
-            sigPow = ffts[cnd]['mag'][compIdx[c]]
-            thisF =  sigPow/ noisePow
-            fftVals[cnd]['sigPow'].append(sigPow)
-            fftVals[cnd]['noisePow'].append(noisePow)
-            fRatio[cnd]['F'].append(thisF)
-            fRatio[cnd]['pval'].append(scipy.stats.f.pdf(thisF, dfNum, dfDenom))
-    return fftVals, fRatio
+    rec_trigs = event_table['trigs']
+    rec_trigs_idx = event_table['trigs_idx']
+    
+    trigs_to_discard = numpy.empty(0, dtype=numpy.int64); skip = 0
+    for i in range(len(sent_trigs)):
+        if (i+skip) > (len(rec_trigs)-1):
+            break
+        if sent_trigs[i] != rec_trigs[i+skip]:
+            trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
+            alignment_found = False
+            while alignment_found == False:
+                skip = skip+1
+                if (i+skip) > (len(rec_trigs)-1):
+                    #print('Breaking while')
+                    break
+                if(sent_trigs[i] != rec_trigs[i+skip]):
+                    trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
+                else:
+                    alignment_found = True
+                    
+    rec_trigs = numpy.delete(rec_trigs, trigs_to_discard)
+    rec_trigs_idx = numpy.delete(rec_trigs_idx, trigs_to_discard)
+    
+    rec_trigs = rec_trigs[0:len(sent_trigs)]
+    rec_trigs_idx = rec_trigs_idx[0:len(sent_trigs)]
+    if len(numpy.where((rec_trigs == sent_trigs) == False)[0]) > 0:
+        match_found = False
+    else:
+        match_found = True
+
+    event_table['trigs'] = rec_trigs
+    event_table['trigs_idx'] = rec_trigs_idx
+
+    res_info = {}
+    res_info['match'] = match_found
+    res_info['len_sent'] = len(sent_trigs)
+    res_info['len_matching'] = len(rec_trigs)
+
+    return event_table, res_info
+
+
+
+def reref_cnt(rec, ref_channel, channels=None):
+    """
+    Rereference channels in a continuous recording.
+
+    Parameters
+    ----------
+    rec : 
+        Recording
+    ref_channel: int
+        The reference channel (indexing starts from zero).
+    channels : list of ints
+        List of channels to be rereferenced (indexing starts from zero).
+  
+    Returns
+    -------
+    rec : an array of floats with dimenions nChannels X nDataPoints
+        
+    Examples
+    --------
+    >>> reref_cnt(rec=dats, channels=[1, 2, 3], ref_channel=4)
+    """
+
+    nChannels = rec.shape[0]
+    if channels == None:
+        channels = list(range(nChannels))
+    for i in range(nChannels):
+        if i in channels and i != ref_channel:
+            rec[i,:] = rec[i,:] - rec[ref_channel,:]
+    rec[ref_channel,:] = 0
+    return rec
+
 
 def saveFRatios(fName, subj, fRatio, fftVals, cnds_trigs, cndsLabels, nCleanByBlock, nRawByBlock):
     """
@@ -773,36 +748,68 @@ def save_chained(din, d1, data_chan, datastring, refstring):
         din[datastring+refstring][cnd] = copy.deepcopy(d1[cnd][data_chan,:])
     return din
     
-## def combine_chained(d1, d2):
-##     cnds = d1.keys()
-##     cmb = {}
-##     for cnd in cnds:
-##         cmb[cnd] = (d1[cnd] + d2[cnd])/2
-##     return cmb
+    
 
-def combine_chained(dList):
+def segment_cnt(rec, event_table, epochStart, epochEnd, sampRate, eventsList=None):
     """
+    Segment a continuous EEG recording into discrete event-related epochs.
     
     Parameters
     ----------
-
+    rec: array of floats
+        The EEG data.
+    event_table :  dict with the following keys
+       - trigs: array of ints
+           The list of triggers in the EEG recording.
+       - trigs_pos : array of ints
+           The indexes of trigs in the EEG recording.
+    epochStart : float
+        The time at which the epoch starts relative to the trigger code, in seconds.
+    epochEnd : float
+        The time at which the epoch ends relative to the trigger code, in seconds.
+    sampRate : int
+        The sampling rate of the EEG recording.
+    eventsList : list of ints
+        The list of events for which epochs should be extracted.
+        If no list is given epochs will be extracted for all the trigger
+        codes present in the event table.
+    
     Returns
     ----------
-
+    segs : a dict with a list of epochs for each 
+    
     Examples
     ----------
     """
-    cnds = dList[0].keys()
-    cmb = {}
-    for cnd in cnds:
-        for i in range(len(dList)):
-            if i == 0:
-                cmb[cnd] = dList[0][cnd]
+    if eventsList == None:
+        eventsList = numpy.unique(trigs)
+
+    trigs = event_table['trigs']
+    trigs_pos = event_table['trigs_idx']
+    epochStartSample = int(round(epochStart*sampRate))
+    epochEndSample = int(round(epochEnd*sampRate))
+
+    nSamples = epochEndSample - epochStartSample
+    segs = {}
+    for i in range(len(eventsList)):
+        idx = trigs_pos[numpy.where(trigs == eventsList[i])[0]]
+        segs[str(eventsList[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==eventsList[i]])))
+        for j in range(len(idx)):
+            thisStartPnt = (idx[j]+epochStartSample)
+            thisStopPnt = (idx[j]+epochEndSample)
+            if thisStartPnt < 0 or thisStopPnt > rec.shape[1]:
+                if thisStartPnt < 0:
+                    print(idx[j], "Epoch starts before start of recording. Skipping")
+                if thisStopPnt > rec.shape[1]:
+                    print(idx[j], "Epoch ends after end of recording. Skipping")
             else:
-                cmb[cnd] = cmb[cnd] + dList[i][cnd]
-        cmb[cnd] = cmb[cnd] / len(dList)
-            
-    return cmb
+                segs[str(eventsList[i])][:,:,j] = rec[:, thisStartPnt:thisStopPnt]
+
+    return segs
+
+
+
+        
 
 
 
@@ -811,6 +818,7 @@ def combine_chained(dList):
 
 
 
+#Utility functions
 #############
 def nextpow2(x):
     """
