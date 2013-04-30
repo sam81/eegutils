@@ -22,7 +22,7 @@ recordings.
 """
 from __future__ import division
 import copy, numpy
-from numpy import abs, arange, array, convolve, ceil, zeros
+from numpy import abs, arange, array, convolve, ceil, mean, repeat, zeros
 from numpy.fft import fft
 from scipy import signal
 from scipy.signal import firwin2, blackman, hamming, hanning, bartlett
@@ -124,20 +124,20 @@ def chain_segments(rec, n_chunks, samp_rate, start=None, end=None, baseline_dur=
     fromeegChainedAve = {}
     for i in range(len(eventList)):
         currCode = eventList[i]
-        eegChained[currCode] = zeros((rec[currCode][0].shape[0], sweep_size))  #two-dimensional array of zeros
-        fromeegChainedAve[currCode] = zeros((rec[currCode][0].shape[0], chunk_size))
+        eegChained[currCode] = zeros((rec[currCode].shape[0], sweep_size))  #two-dimensional array of zeros
+        fromeegChainedAve[currCode] = zeros((rec[currCode].shape[0], chunk_size))
         nReps[currCode] = zeros((n_chunks))
         p = 0
         k = 0
-        while k < len(rec[currCode]):
+        while k < rec[currCode].shape[2]:
             if p > (n_chunks-1):
                 p = 0
             
             idxChunkStart = p*chunk_size
             idxChunkEnd = idxChunkStart + chunk_size
-            eegChained[currCode][:,idxChunkStart:idxChunkEnd] = eegChained[currCode][:,idxChunkStart:idxChunkEnd] + rec[currCode][k][:,startPnt:endPnt]
+            eegChained[currCode][:,idxChunkStart:idxChunkEnd] = eegChained[currCode][:,idxChunkStart:idxChunkEnd] + rec[currCode][:,startPnt:endPnt, k]
             nReps[currCode][p] = nReps[currCode][p] + 1
-            fromeegChainedAve[currCode] = fromeegChainedAve[currCode] + rec[currCode][k][:,startPnt:endPnt]
+            fromeegChainedAve[currCode] = fromeegChainedAve[currCode] + rec[currCode][:,startPnt:endPnt, k]
             p = p+1 #p is the chunk counter
             k = k+1 #k is the epoch counter
 
@@ -330,7 +330,7 @@ def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, tran
             rec[i,:] = convolve(rec[i,:][::-1], b,1)[::-"same"]
     return(rec)
 
-def find_artefact_thresh(rec=None, thresh_lower=[-100], thresh_higher=[100], channels=None):
+def find_artefact_thresh(rec, thresh_lower=[-100], thresh_higher=[100], channels=None):
     """
     
     Parameters
@@ -411,7 +411,7 @@ def getFRatios2(ffts, compIdx, nSideComp, nExcludedComp, other_exclude):
         fftVals[cnd]['noisePow'] = []
         for c in range(len(compIdx)):
             sideBands = get_noise_sidebands2(compIdx, nSideComp, nExcludedComp, ffts[cnd]['mag'], other_exclude)
-            noisePow = mean(sideBands[c])
+            noisePow = numpy.mean(sideBands[c])
             sigPow = ffts[cnd]['mag'][compIdx[c]]
             thisF =  sigPow/ noisePow
             fftVals[cnd]['sigPow'].append(sigPow)
@@ -502,13 +502,21 @@ def get_noise_sidebands2(components, nCmpSide, nExcludeSide, fftArray, other_exc
     return noiseBands
 
 
-def merge_triggers_cnt(trig_array=None, trig_list=None, new_trig=None):
+def merge_triggers_cnt(trig_array, trig_list, new_trig):
     """
     take one or more triggers in trig_list, and substitute them with new_trig
     """
     for trig in trig_list:
         trig_array[numpy.where(trig_array==trig)] = new_trig
     return trig_array
+
+def merge_triggers_event_table(event_table, trig_list, new_trig):
+    """
+    take one or more triggers in trig_list, and substitute them with new_trig
+    """
+    for trig in trig_list:
+        event_table['trigs'][numpy.where(event_table['trigs']==trig)] = new_trig
+    return event_table
 
 def read_biosig(fName):
     """
@@ -804,8 +812,11 @@ def segment_cnt(rec, event_table, epochStart, epochEnd, sampRate, eventsList=Non
                     print(idx[j], "Epoch ends after end of recording. Skipping")
             else:
                 segs[str(eventsList[i])][:,:,j] = rec[:, thisStartPnt:thisStopPnt]
+    nSegs = {}
+    for i in range(len(eventsList)): #count
+            nSegs[str(eventsList[i])] = segs[str(eventsList[i])].shape[2]
 
-    return segs
+    return segs, nSegs
 
 
 
