@@ -660,35 +660,10 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     """
     rec_trigs = event_table['trigs']
     rec_trigs_idx = event_table['trigs_idx']
+
     allowed_trigs = numpy.unique(sent_trigs)
     rec_trigs_idx = rec_trigs_idx[numpy.in1d(rec_trigs, allowed_trigs)]
     rec_trigs = rec_trigs[numpy.in1d(rec_trigs, allowed_trigs)]
-
-  
-    trigs_to_discard = numpy.empty(0, dtype=numpy.int64); skip = 0
-    for i in range(len(sent_trigs)):
-        if (i+skip) > (len(rec_trigs)-1):
-            break
-        if sent_trigs[i] != rec_trigs[i+skip]:
-            #print(rec_trigs_idx[i+skip])
-            trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
-            alignment_found = False
-            while alignment_found == False:
-                skip = skip+1
-                if (i+skip) > (len(rec_trigs)-1):
-                    #print('Breaking while')
-                    break
-                if sent_trigs[i] != rec_trigs[i+skip]:# or intervals[i+skip] < min_int:
-                    trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
-                else:
-                    alignment_found = True
-    #print(trigs_to_discard)
-    rec_trigs = numpy.delete(rec_trigs, trigs_to_discard)
-    rec_trigs_idx = numpy.delete(rec_trigs_idx, trigs_to_discard)
-
-    rec_trigs = rec_trigs[0:len(sent_trigs)]
-    rec_trigs_idx = rec_trigs_idx[0:len(sent_trigs)]
-
 
     intervals_ok = False
     while intervals_ok == False:
@@ -697,17 +672,45 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
         if intervals[intervals < min_int].shape[0] == 0:
             intervals_ok = True
         else:
-            idx_to_del = numpy.where(intervals<min_int)[0][0]
+            idx_to_del = (numpy.where(intervals<min_int)[0][0])
+            #print(rec_trigs_idx)
             rec_trigs = numpy.delete(rec_trigs, idx_to_del)
             rec_trigs_idx = numpy.delete(rec_trigs_idx, idx_to_del)
+  
+    ## trigs_to_discard = numpy.empty(0, dtype=numpy.int64); skip = 0
+    ## for i in range(len(sent_trigs)):
+    ##     if (i+skip) > (len(rec_trigs)-1):
+    ##         break
+    ##     if sent_trigs[i] != rec_trigs[i+skip]:
+    ##         #print(rec_trigs_idx[i+skip])
+    ##         trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
+    ##         alignment_found = False
+    ##         while alignment_found == False:
+    ##             skip = skip+1
+    ##             if (i+skip) > (len(rec_trigs)-1):
+    ##                 #print('Breaking while')
+    ##                 break
+    ##             if sent_trigs[i] != rec_trigs[i+skip]:# or intervals[i+skip] < min_int:
+    ##                 trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
+    ##             else:
+    ##                 alignment_found = True
+    ## #print(trigs_to_discard)
+    ## rec_trigs = numpy.delete(rec_trigs, trigs_to_discard)
+    ## rec_trigs_idx = numpy.delete(rec_trigs_idx, trigs_to_discard)
+
+    #rec_trigs = rec_trigs[0:len(sent_trigs)]
+    #rec_trigs_idx = rec_trigs_idx[0:len(sent_trigs)]
+
+
+
             #print(idx_to_del)
 
    
    
-    if len(numpy.where((rec_trigs == sent_trigs) == False)[0]) > 0:
-        match_found = False
-    else:
+    if numpy.array_equal(rec_trigs, sent_trigs) == True:
         match_found = True
+    else:
+        match_found = False
 
     event_table['trigs'] = rec_trigs
     event_table['trigs_idx'] = rec_trigs_idx
@@ -715,7 +718,7 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     res_info = {}
     res_info['match'] = match_found
     res_info['len_sent'] = len(sent_trigs)
-    res_info['len_matching'] = len(rec_trigs)
+    res_info['len_selected'] = len(rec_trigs)
 
     return res_info
 
