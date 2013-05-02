@@ -17,9 +17,10 @@
 #    along with eegutils.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-This module contains functions to process electroencephalographic
-recordings.
+This module contains functions to extract and process event related potentials (ERPs) from
+electroencephalographic (EEG) recordings.
 """
+
 from __future__ import division
 import copy, numpy
 from numpy import abs, arange, array, convolve, ceil, mean, repeat, zeros
@@ -35,30 +36,6 @@ except ImportError:
     pass
 import ctypes
 
-def average_epochs(rec):
-    """
-    Average the epochs of a segmented recording.
-    Parameters
-    ----------
-    rec : dict where each element is a 3D array with dimensions (nChannels x nSamples x nEpochs)
-        Recording
-    Returns
-    ----------
-    ave : dict where each element is a 2D array with dimensions (nChannels x nSamples)
-    nSegs : dict of ints
-        The number of epochs averaged for each condition
-    Examples
-    ----------
-    """
-    eventList = list(rec.keys())
-    ave = {}
-    nSegs = {}
-    for code in eventList:
-        nSegs[code] = rec[code].shape[2]
-        ave[code] = numpy.mean(rec[code], axis=2)
-
-    return ave, nSegs
-
 def average_averages(ave_list, nSegments):
     """
     Perform a weighted average of a list of averages. The weight of
@@ -67,8 +44,11 @@ def average_averages(ave_list, nSegments):
     
     Parameters
     ----------
-    ave_list
-    nSegments
+    ave_list : dict of list of 2D numpy arrays
+        The list of averages for each experimental condition.
+    nSegments : dict of ints
+        The number of epochs on which each average is based 
+
     Returns
     ----------
 
@@ -90,6 +70,31 @@ def average_averages(ave_list, nSegments):
     
     return weightedAve, nSegsSum
 
+def average_epochs(rec):
+    """
+    Average the epochs of a segmented recording.
+
+    Parameters
+    ----------
+    rec : dict where each element is a 3D array with dimensions (nChannels x nSamples x nEpochs)
+        Recording
+    Returns
+    ----------
+    ave : dict where each element is a 2D array with dimensions (nChannels x nSamples)
+    nSegs : dict of ints
+        The number of epochs averaged for each condition
+    Examples
+    ----------
+    """
+    eventList = list(rec.keys())
+    ave = {}
+    nSegs = {}
+    for code in eventList:
+        nSegs[code] = rec[code].shape[2]
+        ave[code] = numpy.mean(rec[code], axis=2)
+
+    return ave, nSegs
+
 def baseline_correct(rec, bsStart, preDur, sampRate):
     """
     preDur:  duration of recording before experimental event
@@ -104,7 +109,7 @@ def baseline_correct(rec, bsStart, preDur, sampRate):
             for k in range(rec[str(eventList[i])].shape[0]): #for each electrode
                 thisBaseline = numpy.mean(rec[str(eventList[i])][k,bsStartSample:epochStartSample,j])
                 rec[str(eventList[i])][k,:,j] = rec[str(eventList[i])][k,:,j] - thisBaseline
-    return rec
+    return 
     
 def chain_segments(rec, n_chunks, samp_rate, start=None, end=None, baseline_dur=0):
     """
@@ -179,6 +184,7 @@ def detrend(rec):
     for i in range(nChannels):
         rec[i,:] = rec[i,:] - numpy.mean(rec[i,:])
     return rec
+
 def detrend_segmentsed(rec):
     eventList = list(rec.keys())
     for ev in eventList:
@@ -278,7 +284,7 @@ def filter_segmented(rec, channels, samp_rate, filtertype, ntaps, cutoffs, trans
                 if j in channels:
                     rec[ev][j,:,i] = convolve(rec[ev][j,:,i], b, 'same')
                     rec[ev][j,:,i] = convolve(rec[ev][j,:,i][::-1], b, 'same')[::-1]
-    return(rec)
+    return 
         
 def filter_continuous(rec, channels, samp_rate, filtertype, ntaps, cutoffs, transition_width):
     """
@@ -504,23 +510,50 @@ def get_noise_sidebands2(components, nCmpSide, nExcludeSide, fftArray, other_exc
 
 def merge_triggers_cnt(trig_array, trig_list, new_trig):
     """
-    take one or more triggers in trig_list, and substitute them with new_trig
+    Take one or more triggers in trig_list, and substitute them with new_trig
+
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+    Examples
+    ----------
     """
-    for trig in trig_list:
-        trig_array[numpy.where(trig_array==trig)] = new_trig
-    return trig_array
+    
+    trig_array[numpy.in1d(trig_array, trig_list)] = new_trig
+
+    return 
 
 def merge_triggers_event_table(event_table, trig_list, new_trig):
     """
-    take one or more triggers in trig_list, and substitute them with new_trig
+    Substitute the event table triggers listed in trig_list
+    with new_trig
+
+    Parameters
+    ----------
+    event_table : dict of int arrays
+        The event table
+    trig_list : array of ints
+        The list of triggers to substitute
+    new_trig : int
+        The new trigger used to substitute the triggers
+        in trig_list
+    Returns
+    ----------
+
+    Examples
+    ----------
     """
-    for trig in trig_list:
-        event_table['trigs'][numpy.where(event_table['trigs']==trig)] = new_trig
-    return event_table
+    
+    event_table['trigs'][numpy.in1d(event_table['trigs'], trig_list)] = new_trig
+   
+    return 
 
 def read_biosig(fName):
     """
-    
+    Wrapper of biosig4python functions for reading Biosemi BDF files.
     Parameters
     ----------
 
@@ -559,11 +592,16 @@ def read_biosig(fName):
 
     return data, array(codes), array(pos)
 
-def remove_artefact(rec, to_remove):
+def remove_epochs(rec, to_remove):
     """
+    Remove epochs from a segmented recording.
     
     Parameters
     ----------
+    rec : dict of 3D arrays
+        The segmented recording
+    to_remove : dict of 1D arrays
+        List of epochs to remove for each condition
 
     Returns
     ----------
@@ -575,9 +613,9 @@ def remove_artefact(rec, to_remove):
     for code in eventList:
         rec[code] = numpy.delete(rec[code], to_remove[code], axis=2)
     
-    return rec
+    return 
 
-def remove_spurious_triggers(event_table, sent_trigs):
+def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     """
     Remove spurious trigger codes.
 
@@ -590,6 +628,11 @@ def remove_spurious_triggers(event_table, sent_trigs):
            The indexes of trigs in the EEG recording.
     sent_triggers : array of floats
         Array containing the list of triggers that were sent to the EEG recording equipment.
+    min_int : float
+        The minimum possible time interval between consecutive triggers in seconds
+    samp_rate : int
+        The sampling rate of the EEG recording
+
 
     Returns
     -------
@@ -617,12 +660,17 @@ def remove_spurious_triggers(event_table, sent_trigs):
     """
     rec_trigs = event_table['trigs']
     rec_trigs_idx = event_table['trigs_idx']
-    
+    allowed_trigs = numpy.unique(sent_trigs)
+    rec_trigs_idx = rec_trigs_idx[numpy.in1d(rec_trigs, allowed_trigs)]
+    rec_trigs = rec_trigs[numpy.in1d(rec_trigs, allowed_trigs)]
+
+  
     trigs_to_discard = numpy.empty(0, dtype=numpy.int64); skip = 0
     for i in range(len(sent_trigs)):
         if (i+skip) > (len(rec_trigs)-1):
             break
         if sent_trigs[i] != rec_trigs[i+skip]:
+            #print(rec_trigs_idx[i+skip])
             trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
             alignment_found = False
             while alignment_found == False:
@@ -630,16 +678,32 @@ def remove_spurious_triggers(event_table, sent_trigs):
                 if (i+skip) > (len(rec_trigs)-1):
                     #print('Breaking while')
                     break
-                if(sent_trigs[i] != rec_trigs[i+skip]):
+                if sent_trigs[i] != rec_trigs[i+skip]:# or intervals[i+skip] < min_int:
                     trigs_to_discard = numpy.append(trigs_to_discard, i+skip)
                 else:
                     alignment_found = True
-                    
+    #print(trigs_to_discard)
     rec_trigs = numpy.delete(rec_trigs, trigs_to_discard)
     rec_trigs_idx = numpy.delete(rec_trigs_idx, trigs_to_discard)
-    
+
     rec_trigs = rec_trigs[0:len(sent_trigs)]
     rec_trigs_idx = rec_trigs_idx[0:len(sent_trigs)]
+
+
+    intervals_ok = False
+    while intervals_ok == False:
+        intervals = numpy.diff(rec_trigs_idx) / samp_rate
+        intervals = numpy.insert(intervals, 0, min_int+1)
+        if intervals[intervals < min_int].shape[0] == 0:
+            intervals_ok = True
+        else:
+            idx_to_del = numpy.where(intervals<min_int)[0][0]
+            rec_trigs = numpy.delete(rec_trigs, idx_to_del)
+            rec_trigs_idx = numpy.delete(rec_trigs_idx, idx_to_del)
+            #print(idx_to_del)
+
+   
+   
     if len(numpy.where((rec_trigs == sent_trigs) == False)[0]) > 0:
         match_found = False
     else:
@@ -653,7 +717,7 @@ def remove_spurious_triggers(event_table, sent_trigs):
     res_info['len_sent'] = len(sent_trigs)
     res_info['len_matching'] = len(rec_trigs)
 
-    return event_table, res_info
+    return res_info
 
 
 
@@ -679,14 +743,13 @@ def reref_cnt(rec, ref_channel, channels=None):
     >>> reref_cnt(rec=dats, channels=[1, 2, 3], ref_channel=4)
     """
 
-    nChannels = rec.shape[0]
     if channels == None:
+        nChannels = rec.shape[0]
         channels = list(range(nChannels))
-    for i in range(nChannels):
-        if i in channels and i != ref_channel:
-            rec[i,:] = rec[i,:] - rec[ref_channel,:]
-    rec[ref_channel,:] = 0
-    return rec
+
+    rec[channels,:] = rec[channels,:] - rec[ref_channel,:]
+
+    return 
 
 
 def saveFRatios(fName, subj, fRatio, fftVals, cnds_trigs, cndsLabels, nCleanByBlock, nRawByBlock):
@@ -804,6 +867,7 @@ def segment_cnt(rec, event_table, epochStart, epochEnd, sampRate, eventsList=Non
         segs[str(eventsList[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==eventsList[i]])))
         for j in range(len(idx)):
             thisStartPnt = (idx[j]+epochStartSample)
+            #print(thisStartPnt)
             thisStopPnt = (idx[j]+epochEndSample)
             if thisStartPnt < 0 or thisStopPnt > rec.shape[1]:
                 if thisStartPnt < 0:
@@ -821,12 +885,6 @@ def segment_cnt(rec, event_table, epochStart, epochEnd, sampRate, eventsList=Non
 
 
         
-
-
-
-
-
-
 
 
 #Utility functions
