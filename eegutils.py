@@ -898,7 +898,7 @@ def save_chained(din, d1, data_chan, data_string, ref_string):
     
     
 
-def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, eventsList=None):
+def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, events_list=None):
     """
     Segment a continuous EEG recording into discrete event-related epochs.
     
@@ -917,7 +917,7 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, eventsList=
         The time at which the epoch ends relative to the trigger code, in seconds.
     samp_rate : int
         The sampling rate of the EEG recording.
-    eventsList : list of ints
+    events_list : list of ints
         The list of events for which epochs should be extracted.
         If no list is given epochs will be extracted for all the trigger
         codes present in the event table.
@@ -929,8 +929,8 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, eventsList=
     Examples
     ----------
     """
-    if eventsList == None:
-        eventsList = numpy.unique(trigs)
+    if events_list == None:
+        events_list = numpy.unique(trigs)
 
     trigs = event_table['trigs']
     trigs_pos = event_table['start_idx']
@@ -939,9 +939,9 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, eventsList=
 
     nSamples = epoch_end_sample - epoch_start_sample
     segs = {}
-    for i in range(len(eventsList)):
-        idx = trigs_pos[numpy.where(trigs == eventsList[i])[0]]
-        segs[str(eventsList[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==eventsList[i]])))
+    for i in range(len(events_list)):
+        idx = trigs_pos[numpy.where(trigs == events_list[i])[0]]
+        segs[str(events_list[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==events_list[i]])))
         for j in range(len(idx)):
             thisStartPnt = (idx[j]+epoch_start_sample)
             #print(thisStartPnt)
@@ -952,10 +952,10 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, eventsList=
                 if thisStopPnt > rec.shape[1]:
                     print(idx[j], "Epoch ends after end of recording. Skipping")
             else:
-                segs[str(eventsList[i])][:,:,j] = rec[:, thisStartPnt:thisStopPnt]
+                segs[str(events_list[i])][:,:,j] = rec[:, thisStartPnt:thisStopPnt]
     nSegs = {}
-    for i in range(len(eventsList)): #count
-            nSegs[str(eventsList[i])] = segs[str(eventsList[i])].shape[2]
+    for i in range(len(events_list)): #count
+            nSegs[str(events_list[i])] = segs[str(events_list[i])].shape[2]
 
     return segs, nSegs
 
