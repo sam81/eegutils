@@ -36,7 +36,7 @@ except ImportError:
     pass
 import ctypes
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 def average_averages(ave_list, n_segments):
     """
