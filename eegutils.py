@@ -23,7 +23,7 @@ electroencephalographic (EEG) recordings.
 
 from __future__ import division
 import copy, numpy
-from numpy import abs, append, arange, array, array_equal, convolve, ceil, diff, mean, repeat, where, zeros
+from numpy import abs, append, arange, array, array_equal, convolve, ceil, floor, diff, mean, repeat, where, zeros
 from numpy.fft import fft
 from scipy import signal
 from scipy.signal import firwin2, blackman, hamming, hanning, bartlett
@@ -35,6 +35,8 @@ try:
 except ImportError:
     pass
 import ctypes
+
+__version__ = "0.1.6"
 
 def average_averages(ave_list, n_segments):
     """
@@ -76,24 +78,29 @@ def average_epochs(rec):
 
     Parameters
     ----------
-    rec : dict where each element is a 3D array with dimensions (nChannels x nSamples x nEpochs)
+    rec : dict of 3D numpy arrays with dimensions (n_channels x n_samples x n_epochs)
         Recording
+
     Returns
     ----------
-    ave : dict where each element is a 2D array with dimensions (nChannels x nSamples)
-    nSegs : dict of ints
-        The number of epochs averaged for each condition
+    ave : dict of 2D numpy arrays with dimensions (n_channels x n_samples)
+        The average epochs for each condition.
+    n_segs : dict of ints
+        The number of epochs averaged for each condition.
+        
     Examples
     ----------
+    >>> ave, n_segs = average_epochs(rec=rec)
     """
+    
     eventList = list(rec.keys())
     ave = {}
-    nSegs = {}
+    n_segs = {}
     for code in eventList:
-        nSegs[code] = rec[code].shape[2]
+        n_segs[code] = rec[code].shape[2]
         ave[code] = numpy.mean(rec[code], axis=2)
 
-    return ave, nSegs
+    return ave, n_segs
 
 def baseline_correct(rec, baseline_start, pre_dur, samp_rate):
     """
@@ -102,21 +109,24 @@ def baseline_correct(rec, baseline_start, pre_dur, samp_rate):
 
     Parameters
     ----------
-    rec: dict of 3D numpy arrays
+    rec: dict of 3D arrays
         The segmented recording.
+    baseline_start: float
+        Start time of the baseline window relative to the event onset, in seconds.
+        The absolute value of baseline_start cannot be greater than pre_dur.
+        In practice baseline_start allows you to define a baseline window shorter
+        than the time window before the experimental event (pre_dur).
     pre_dur: float
-        Duration of recording before the experimental event.
-    bsDur: float
-        Duration of the desired baseline window. This value cannot be
-        greater than pre_dur. In practice bsDur allows you to define a
-        baseline window (bdDur) shorter than the time window before the
-        experimental event (pre_dur).
+        Duration of recording before the experimental event, in seconds.
     samp_rate: int
         The samplig rate of the EEG recording.
     
     Examples
     ----------
-    
+    #baseline window has the same duration of pre_dur
+    >>> baseline_correct(rec=rec, baseline_start=-0.2, pre_dur=0.2, samp_rate=512)
+    #now with a baseline shorter than pre_dur
+    >>> baseline_correct(rec=rec, baseline_start=-0.15, pre_dur=0.2, samp_rate=512)
     """
     eventList = list(rec.keys())
     epochStartSample = int(round(pre_dur*samp_rate))
@@ -198,12 +208,18 @@ def combine_chained(d_list):
     return cmb
 
 def detrend(rec):
+    """
+    
+    """
     nChannels = rec.shape[0]
     for i in range(nChannels):
         rec[i,:] = rec[i,:] - numpy.mean(rec[i,:])
     return rec
 
 def detrend_segmentsed(rec):
+    """
+    
+    """
     eventList = list(rec.keys())
     for ev in eventList:
         for i in range(len(rec[ev])):
@@ -906,8 +922,8 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, events_list
     ----------
     rec: array of floats
         The EEG data.
-    event_table :  dict with the following keys
-       - trigs: array of ints
+    event_table : dict with the following keys
+       - trigs : array of ints
            The list of triggers in the EEG recording.
        - trigs_pos : array of ints
            The indexes of trigs in the EEG recording.
@@ -924,10 +940,16 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, events_list
     
     Returns
     ----------
-    segs : a dict with a list of epochs for each 
-    
+    segs : dict of 3D arrays
+        The segmented recording. The dictionary has a key for each condition.
+        The corresponding key value is a 3D array with dimensions
+        n_channels x n_samples x n_segments
+    n_segs : dict of ints
+        The number of segments for each condition.
+        
     Examples
     ----------
+    >>>  segs, n_segs = eeg.segment_cnt(rec=dats, event_table=evt_tab, epoch_start=-0.2, epoch_end=0.8, samp_rate=512, events_list=['200', '201'])
     """
     if events_list == None:
         events_list = numpy.unique(trigs)
@@ -953,11 +975,11 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, events_list
                     print(idx[j], "Epoch ends after end of recording. Skipping")
             else:
                 segs[str(events_list[i])][:,:,j] = rec[:, thisStartPnt:thisStopPnt]
-    nSegs = {}
+    n_segs = {}
     for i in range(len(events_list)): #count
-            nSegs[str(events_list[i])] = segs[str(events_list[i])].shape[2]
+            n_segs[str(events_list[i])] = segs[str(events_list[i])].shape[2]
 
-    return segs, nSegs
+    return segs, n_segs
 
 
 
@@ -1029,6 +1051,31 @@ def get_fft(sig, samp_rate, window, power_of_two):
     x = {'freqArray': freqArray, 'mag':p}
     return x
 
+def get_spectrogram(sig, samp_freq, win_length, overlap, win_type, power_of_two):
+    """
+    winLength in seconds
+    overlap in percent
+    if the signal length is not a multiple of the window length it is trucated
+    """
+    winLengthPnt = floor(win_length * samp_freq)
+    step = winLengthPnt - round(winLengthPnt * overlap / 100.)
+    ind = arange(0, len(sig) - winLengthPnt, step)
+    n = len(ind)
+
+    x = get_spectrum(sig[ind[0]:ind[0]+winLengthPnt], samp_freq, win_type, power_of_two)
+    freq_array = x['freq']; p = x['mag']
+
+    power_matrix = zeros((len(freq_array), n))
+    power_matrix[:,0] = p
+    for i in range(1, n):
+        x = get_spectrum(sig[ind[i]:ind[i]+winLengthPnt], samp_freq, win_type, power_of_two)
+        freq_array = x['freq']; p = x['mag']
+        power_matrix[:,i] = p
+
+    timeInd = arange(0, len(sig), step)
+    time_array = 1./samp_freq * (timeInd)
+    x = {'freq': freq_array, 'time': time_array, 'mag': power_matrix}
+    return x
 
 def get_spectrum(sig, samp_rate, window, power_of_two):
     """
@@ -1074,8 +1121,8 @@ def get_spectrum(sig, samp_rate, window, power_of_two):
     else:
          p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
 
-    freqArray = arange(0, nUniquePts, 1.0) * (samp_rate / nfft);
-    x = {'freqArray': freqArray, 'mag':p}
+    freq_array = arange(0, nUniquePts, 1.0) * (samp_rate / nfft);
+    x = {'freq': freq_array, 'mag':p}
     return x
 
 
