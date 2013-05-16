@@ -1,0 +1,5 @@
+eegutils (0.0.0) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- sam <sam.carcagno@gmail.com>  Fri, 08 Feb 2013 18:09:32 +0100
