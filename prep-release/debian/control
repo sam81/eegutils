@@ -16,7 +16,7 @@ Depends: ${python3:Depends},
 	 ${misc:Depends}, 
 	 ${shlibs:Depends},
 	 python3 (>= 3.2), 
-	 python3-numpy (>= 1:1.6.1)
+	 python3-numpy (>= 1:1.6.1),
 	 python3-scipy (>= 0.10)	
 Description: Python module for processing electroencephalographic recordings
  Python module for processing electroencephalographic recordings

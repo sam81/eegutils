@@ -11,9 +11,9 @@ for i in range(len(ln)):
            ver = ln[i].strip().split('=')[1].strip()
            ver = ver[1:len(ver)-2]
 tarball_path = "../dist/eegutils-" + ver + ".tar.gz"
-buldpath = " ../pkg_build/" + platform.linux_distribution[0] + ' ' + platform.linux_distribution[1] + ' ' + platform.uname()[4]
+buildpath = "../pkg_build/" + platform.linux_distribution()[0] + '_' + platform.linux_distribution()[1] + '_' + platform.uname()[4]
 
-if os.path.exists(os.path.normpath(buildpath)) == False:
+if os.path.exists(buildpath) == False:
     os.makedirs(buildpath)
 cmd = "cp " + tarball_path + " " + buildpath
 os.system(cmd)
@@ -38,7 +38,7 @@ os.chdir(buildpath)
 cmd2 = "tar -xvf " + "eegutils-" + ver + ".tar.gz"
 os.system(cmd2)
 
-cmd3 = "cp -R " + "..prep-release/debian/ ./eegutils-" + ver
+cmd3 = "cp -R " + "../../prep-release/debian/ ./eegutils-" + ver
 os.system(cmd3)
 
 
