@@ -800,7 +800,7 @@ def remove_spurious_triggers2(event_table, sent_trigs, min_trig_dur):
         match_found = False
 
     x = diff(rec_trigs_start)/2048
-    print(x[x<1.375])
+    #print(x[x<1.375])
     print(min(x), max(x), mean(x))
     event_table['trigs'] = rec_trigs
     event_table['trigs_dur'] = rec_trigs_dur
