@@ -276,7 +276,7 @@ def extract_event_table_nonorm(trig_chan, samp_rate):
     event_table = {}
     event_table['trigs'] = evt
     event_table['start_idx'] = startPoints
-    event_table['stop_idx'] = stopPoints
+    #event_table['stop_idx'] = stopPoints
     event_table['trigs_dur'] = trigDurs
 
     return event_table
@@ -391,12 +391,19 @@ def filter_continuous(rec, channels, samp_rate, filter_type, n_taps, cutoffs, tr
             rec[i,:] = convolve(rec[i,:][::-1], b,1)[::-"same"]
     return(rec)
 
-def find_artefact_thresh(rec, thresh_lower=[-100], thresh_higher=[100], channels=None):
+def find_artefact_thresh(rec, thresh=[100], channels=None):
     """
+    Find epochs with voltage values exceeding a given threshold.
     
     Parameters
     ----------
-
+    rec : dict of 3D arrays
+        The segmented recording
+    thresh :
+        The threshold value.
+    channels = array or list of ints
+        The indexes of the channels on which to find artefacts.
+        
     Returns
     ----------
 
@@ -410,7 +417,7 @@ def find_artefact_thresh(rec, thresh_lower=[-100], thresh_higher=[100], channels
         for j in range(rec[str(eventList[i])].shape[2]): #for each epoch
             for k in range(rec[str(eventList[i])].shape[0]): #for each channel
                 if k in channels:
-                    if (max(rec[str(eventList[i])][k,:,j]) > thresh_higher[channels.index(k)] or min(rec[str(eventList[i])][k,:,j]) < thresh_lower[channels.index(k)]) == True:
+                    if (max(rec[str(eventList[i])][k,:,j]) > thresh[channels.index(k)] or min(rec[str(eventList[i])][k,:,j]) < -thresh[channels.index(k)]) == True:
                         segs_to_reject[str(eventList[i])].append(j)
                 
             
@@ -633,9 +640,11 @@ def read_biosig(file_name):
 
     codes = []
     pos = []
+    dur = []
     for k in range(HDR.EVENT.N):
         codes.append(TYP[k] & (256-1))
         pos.append(int(POS[k]))
+        dur.append(int(DUR[k]))
         
 
  
@@ -644,8 +653,13 @@ def read_biosig(file_name):
     #
     # release allocated memory
     biosig.destructHDR(HDR)
-
-    return data, array(codes), array(pos)
+    bdfRec = {}
+    event_table = {}
+    event_table['trigs'] = array(codes)
+    event_table['start_idx'] = array(pos)
+    #event_table['stop_idx'] = stopPoints
+    event_table['trigs_dur'] = array(dur)
+    return data, event_table
 
 def remove_epochs(rec, to_remove):
     """
@@ -781,17 +795,17 @@ def remove_spurious_triggers2(event_table, sent_trigs, min_trig_dur):
     rec_trigs = event_table['trigs']
     rec_trigs_dur = event_table['trigs_dur']
     rec_trigs_start = event_table['start_idx']
-    rec_trigs_stop = event_table['stop_idx']
+    #rec_trigs_stop = event_table['stop_idx']
     
     allowed_trigs = numpy.unique(sent_trigs)
     rec_trigs_dur = rec_trigs_dur[numpy.in1d(rec_trigs, allowed_trigs)]
     rec_trigs_start = rec_trigs_start[numpy.in1d(rec_trigs, allowed_trigs)]
-    rec_trigs_stop = rec_trigs_stop[numpy.in1d(rec_trigs, allowed_trigs)]
+    #rec_trigs_stop = rec_trigs_stop[numpy.in1d(rec_trigs, allowed_trigs)]
     rec_trigs = rec_trigs[numpy.in1d(rec_trigs, allowed_trigs)]
 
     rec_trigs = rec_trigs[rec_trigs_dur >= min_trig_dur]
     rec_trigs_start = rec_trigs_start[rec_trigs_dur >= min_trig_dur]
-    rec_trigs_stop = rec_trigs_stop[rec_trigs_dur >= min_trig_dur]
+    #rec_trigs_stop = rec_trigs_stop[rec_trigs_dur >= min_trig_dur]
     rec_trigs_dur = rec_trigs_dur[rec_trigs_dur >= min_trig_dur]
 
     if numpy.array_equal(rec_trigs, sent_trigs) == True:
@@ -799,13 +813,13 @@ def remove_spurious_triggers2(event_table, sent_trigs, min_trig_dur):
     else:
         match_found = False
 
-    x = diff(rec_trigs_start)/2048
+    #x = diff(rec_trigs_start)/2048
     #print(x[x<1.375])
-    print(min(x), max(x), mean(x))
+    #print(min(x), max(x), mean(x))
     event_table['trigs'] = rec_trigs
     event_table['trigs_dur'] = rec_trigs_dur
     event_table['start_idx'] = rec_trigs_start
-    event_table['stop_idx'] = rec_trigs_stop
+    #event_table['stop_idx'] = rec_trigs_stop
 
     res_info = {}
     res_info['match'] = match_found
