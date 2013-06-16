@@ -26,7 +26,7 @@ import copy, numpy
 from numpy import abs, append, arange, array, array_equal, convolve, ceil, floor, diff, mean, repeat, where, zeros
 from numpy.fft import fft
 from scipy import signal
-from scipy.signal import firwin2, blackman, hamming, hanning, bartlett
+from scipy.signal import firwin2, blackman, hamming, hanning, bartlett, fftconvolve
 import matplotlib.pyplot as plt
 import scipy.stats
 from pandas import DataFrame
@@ -227,41 +227,41 @@ def detrend_segmentsed(rec):
                 rec[ev][i][j,:] = rec[ev][i][j,:] - numpy.mean(rec[ev][i][j,:])
     return(rec)
 
-def extract_event_table(trig_chan, null_trig=0):
-    """
-    Extract the event table from the channel containing the trigger codes.
+## def extract_event_table(trig_chan, null_trig=0):
+##     """
+##     Extract the event table from the channel containing the trigger codes.
 
-    Parameters
-    ----------
-    trig_chan : array of ints
-        The trigger channel.
+##     Parameters
+##     ----------
+##     trig_chan : array of ints
+##         The trigger channel.
 
-    Returns
-    -------
-    event_table :  dict with the following keys
-       - trigs: array of ints
-          The list of triggers in the EEG recording.
-       - trigs_pos : array of ints
-          The indexes of the triggers in the EEG recording.
+##     Returns
+##     -------
+##     event_table :  dict with the following keys
+##        - trigs: array of ints
+##           The list of triggers in the EEG recording.
+##        - trigs_pos : array of ints
+##           The indexes of the triggers in the EEG recording.
     
-    Examples
-    --------
-    >>> 
-    ... 
-    >>> 
-    ... 
-    >>> 
-    """
-    trigs = trig_chan[trig_chan!=null_trig]
-    trigs_idx = numpy.where((trig_chan!=null_trig))[0]
+##     Examples
+##     --------
+##     >>> 
+##     ... 
+##     >>> 
+##     ... 
+##     >>> 
+##     """
+##     trigs = trig_chan[trig_chan!=null_trig]
+##     trigs_idx = numpy.where((trig_chan!=null_trig))[0]
 
-    evtTable = {}
-    evtTable['trigs'] = trigs
-    evtTable['trigs_idx'] = trigs_idx
+##     evtTable = {}
+##     evtTable['trigs'] = trigs
+##     evtTable['trigs_idx'] = trigs_idx
     
-    return evtTable
+##     return evtTable
 
-def extract_event_table_nonorm(trig_chan, samp_rate):
+def extract_event_table(trig_chan, samp_rate):
     trigst = copy.copy(trig_chan)
     trigst[where(diff(trigst) == 0)[0]+1] = 0
     startPoints = where(trigst != 0)[0]
@@ -274,10 +274,10 @@ def extract_event_table_nonorm(trig_chan, samp_rate):
     evt = trigst[where(trigst != 0)]
 
     event_table = {}
-    event_table['trigs'] = evt
-    event_table['start_idx'] = startPoints
+    event_table['code'] = evt
+    event_table['idx'] = startPoints
     #event_table['stop_idx'] = stopPoints
-    event_table['trigs_dur'] = trigDurs
+    event_table['dur'] = trigDurs
 
     return event_table
     
@@ -337,8 +337,8 @@ def filter_segmented(rec, channels, samp_rate, filter_type, n_taps, cutoffs, tra
         for i in range(rec[ev].shape[2]): #for each epoch
             for j in range(rec[ev].shape[0]): #for each channel
                 if j in channels:
-                    rec[ev][j,:,i] = convolve(rec[ev][j,:,i], b, 'same')
-                    rec[ev][j,:,i] = convolve(rec[ev][j,:,i][::-1], b, 'same')[::-1]
+                    rec[ev][j,:,i] = fftconvolve(rec[ev][j,:,i], b, 'same')
+                    rec[ev][j,:,i] = fftconvolve(rec[ev][j,:,i][::-1], b, 'same')[::-1]
     return 
         
 def filter_continuous(rec, channels, samp_rate, filter_type, n_taps, cutoffs, transition_width):
@@ -387,11 +387,11 @@ def filter_continuous(rec, channels, samp_rate, filter_type, n_taps, cutoffs, tr
    
     for i in range(nChannels):
         if i in channels:
-            rec[i,:] = convolve(rec[i,:], b, "same")
-            rec[i,:] = convolve(rec[i,:][::-1], b,1)[::-"same"]
+            rec[i,:] = fftconvolve(rec[i,:], b, "same")
+            rec[i,:] = fftconvolve(rec[i,:][::-1], b, "same")[::-1]
     return(rec)
 
-def find_artefact_thresh(rec, thresh=[100], channels=None):
+def find_artefact_thresh(rec, thresh=[100], channels=[0]):
     """
     Find epochs with voltage values exceeding a given threshold.
     
@@ -410,6 +410,9 @@ def find_artefact_thresh(rec, thresh=[100], channels=None):
     Examples
     ----------
     """
+    if len(channels) != len(thresh):
+        print("The number of thresholds must be equal to the number of channels")
+        return
     eventList = list(rec.keys())
     segs_to_reject = {}
     for i in range(len(eventList)):
@@ -420,7 +423,7 @@ def find_artefact_thresh(rec, thresh=[100], channels=None):
                     if (max(rec[str(eventList[i])][k,:,j]) > thresh[channels.index(k)] or min(rec[str(eventList[i])][k,:,j]) < -thresh[channels.index(k)]) == True:
                         segs_to_reject[str(eventList[i])].append(j)
                 
-            
+
     for i in range(len(eventList)): #segment may be flagged by detection in more than one channel
         segs_to_reject[str(eventList[i])] = numpy.unique(segs_to_reject[str(eventList[i])])
 
@@ -609,7 +612,7 @@ def merge_triggers_event_table(event_table, trig_list, new_trig):
     ----------
     """
     
-    event_table['trigs'][numpy.in1d(event_table['trigs'], trig_list)] = new_trig
+    event_table['code'][numpy.in1d(event_table['code'], trig_list)] = new_trig
    
     return 
 
@@ -691,9 +694,9 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     Parameters
     ----------
     event_table :  dict with the following keys
-       - trigs: array of ints
+       - code: array of ints
            The list of triggers in the EEG recording.
-       - trigs_pos : array of ints
+       - idx : array of ints
            The indexes of trigs in the EEG recording.
     sent_triggers : array of floats
         Array containing the list of triggers that were sent to the EEG recording equipment.
@@ -727,8 +730,8 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     ... 
     >>> 
     """
-    rec_trigs = event_table['trigs']
-    rec_trigs_idx = event_table['trigs_idx']
+    rec_trigs = event_table['code']
+    rec_trigs_idx = event_table['idx']
 
     allowed_trigs = numpy.unique(sent_trigs)
     rec_trigs_idx = rec_trigs_idx[numpy.in1d(rec_trigs, allowed_trigs)]
@@ -781,8 +784,8 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     else:
         match_found = False
 
-    event_table['trigs'] = rec_trigs
-    event_table['trigs_idx'] = rec_trigs_idx
+    event_table['code'] = rec_trigs
+    event_table['idx'] = rec_trigs_idx
 
     res_info = {}
     res_info['match'] = match_found
@@ -792,9 +795,9 @@ def remove_spurious_triggers(event_table, sent_trigs, min_int, samp_rate):
     return res_info
 
 def remove_spurious_triggers2(event_table, sent_trigs, min_trig_dur):
-    rec_trigs = event_table['trigs']
-    rec_trigs_dur = event_table['trigs_dur']
-    rec_trigs_start = event_table['start_idx']
+    rec_trigs = event_table['code']
+    rec_trigs_dur = event_table['dur']
+    rec_trigs_start = event_table['idx']
     #rec_trigs_stop = event_table['stop_idx']
     
     allowed_trigs = numpy.unique(sent_trigs)
@@ -816,9 +819,9 @@ def remove_spurious_triggers2(event_table, sent_trigs, min_trig_dur):
     #x = diff(rec_trigs_start)/2048
     #print(x[x<1.375])
     #print(min(x), max(x), mean(x))
-    event_table['trigs'] = rec_trigs
-    event_table['trigs_dur'] = rec_trigs_dur
-    event_table['start_idx'] = rec_trigs_start
+    event_table['code'] = rec_trigs
+    event_table['dur'] = rec_trigs_dur
+    event_table['idx'] = rec_trigs_start
     #event_table['stop_idx'] = rec_trigs_stop
 
     res_info = {}
@@ -965,11 +968,12 @@ def segment_cnt(rec, event_table, epoch_start, epoch_end, samp_rate, events_list
     ----------
     >>>  segs, n_segs = eeg.segment_cnt(rec=dats, event_table=evt_tab, epoch_start=-0.2, epoch_end=0.8, samp_rate=512, events_list=['200', '201'])
     """
+    trigs = event_table['code']
     if events_list == None:
         events_list = numpy.unique(trigs)
 
-    trigs = event_table['trigs']
-    trigs_pos = event_table['start_idx']
+    trigs = event_table['code']
+    trigs_pos = event_table['idx']
     epoch_start_sample = int(round(epoch_start*samp_rate))
     epoch_end_sample = int(round(epoch_end*samp_rate))
 
@@ -1140,86 +1144,86 @@ def get_spectrum(sig, samp_rate, window, power_of_two):
     return x
 
 
-def fir2_filt(f1, f2, f3, f4, snd, samp_rate, n_taps):
-    """
-    Filter signal with a fir2 filter.
+## def fir2_filt(f1, f2, f3, f4, snd, samp_rate, n_taps):
+##     """
+##     Filter signal with a fir2 filter.
 
-    This function designs and applies a fir2 filter to a sound.
-    The frequency response of the ideal filter will transition
-    from 0 to 1 between 'f1' and 'f2', and from 1 to zero
-    between 'f3' and 'f4'. The frequencies must be given in
-    increasing order.
+##     This function designs and applies a fir2 filter to a sound.
+##     The frequency response of the ideal filter will transition
+##     from 0 to 1 between 'f1' and 'f2', and from 1 to zero
+##     between 'f3' and 'f4'. The frequencies must be given in
+##     increasing order.
 
-    Parameters
-    ----------
-    f1 : float
-        Frequency in hertz of the point at which the transition
-        for the low-frequency cutoff ends. 
-    f2 : float
-        Frequency in hertz of the point at which the transition
-        for the low-frequency cutoff starts.
-    f3 : float
-        Frequency in hertz of the point at which the transition
-        for the high-frequency cutoff starts.
-    f4 : float
-        Frequency in hertz of the point at which the transition
-        for the high-frequency cutoff ends. 
-    snd : array of floats
-        The sound to be filtered.
-    samp_rate : int
-        Sampling frequency of 'snd'.
+##     Parameters
+##     ----------
+##     f1 : float
+##         Frequency in hertz of the point at which the transition
+##         for the low-frequency cutoff ends. 
+##     f2 : float
+##         Frequency in hertz of the point at which the transition
+##         for the low-frequency cutoff starts.
+##     f3 : float
+##         Frequency in hertz of the point at which the transition
+##         for the high-frequency cutoff starts.
+##     f4 : float
+##         Frequency in hertz of the point at which the transition
+##         for the high-frequency cutoff ends. 
+##     snd : array of floats
+##         The sound to be filtered.
+##     samp_rate : int
+##         Sampling frequency of 'snd'.
 
-    Returns
-    -------
-    snd : 2-dimensional array of floats
+##     Returns
+##     -------
+##     snd : 2-dimensional array of floats
 
-    Notes
-    -------
-    If 'f1' and 'f2' are zero the filter will be lowpass.
-    If 'f3' and 'f4' are equal to or greater than the nyquist
-    frequency (samp_rate/2) the filter will be highpass.
-    In the other cases the filter will be bandpass.
+##     Notes
+##     -------
+##     If 'f1' and 'f2' are zero the filter will be lowpass.
+##     If 'f3' and 'f4' are equal to or greater than the nyquist
+##     frequency (samp_rate/2) the filter will be highpass.
+##     In the other cases the filter will be bandpass.
 
-    The order of the filter (number of taps) is fixed at 256.
-    This function uses internally 'scipy.signal.firwin2'.
+##     The order of the filter (number of taps) is fixed at 256.
+##     This function uses internally 'scipy.signal.firwin2'.
        
-    Examples
-    --------
-    >>> noise = broadbandNoise(spectrumLevel=40, duration=180, ramp=10,
-    ...     channel='Both', samp_rate=48000, maxLevel=100)
-    >>> lpNoise = fir2_filt(f1=0, f2=0, f3=1000, f4=1200, 
-    ...     snd=noise, samp_rate=48000) #lowpass filter
-    >>> hpNoise = fir2_filt(f1=0, f2=0, f3=24000, f4=26000, 
-    ...     snd=noise, samp_rate=48000) #highpass filter
-    >>> bpNoise = fir2_filt(f1=400, f2=600, f3=4000, f4=4400, 
-    ...     snd=noise, samp_rate=48000) #bandpass filter
-    """
+##     Examples
+##     --------
+##     >>> noise = broadbandNoise(spectrumLevel=40, duration=180, ramp=10,
+##     ...     channel='Both', samp_rate=48000, maxLevel=100)
+##     >>> lpNoise = fir2_filt(f1=0, f2=0, f3=1000, f4=1200, 
+##     ...     snd=noise, samp_rate=48000) #lowpass filter
+##     >>> hpNoise = fir2_filt(f1=0, f2=0, f3=24000, f4=26000, 
+##     ...     snd=noise, samp_rate=48000) #highpass filter
+##     >>> bpNoise = fir2_filt(f1=400, f2=600, f3=4000, f4=4400, 
+##     ...     snd=noise, samp_rate=48000) #bandpass filter
+##     """
 
-    f1 = (f1 * 2) / samp_rate
-    f2 = (f2 * 2) / samp_rate
-    f3 = (f3 * 2) / samp_rate
-    f4 = (f4 * 2) / samp_rate
+##     f1 = (f1 * 2) / samp_rate
+##     f2 = (f2 * 2) / samp_rate
+##     f3 = (f3 * 2) / samp_rate
+##     f4 = (f4 * 2) / samp_rate
 
 
-    if f2 == 0: #low pass
-        #print('lowpass')
-        f = [0, f3, f4, 1]
-        m = [1, 1, 0.00003, 0]
+##     if f2 == 0: #low pass
+##         #print('lowpass')
+##         f = [0, f3, f4, 1]
+##         m = [1, 1, 0.00003, 0]
         
-    elif f3 < 1: #bandpass
-        #print('bandpass')
-        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
-        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
+##     elif f3 < 1: #bandpass
+##         #print('bandpass')
+##         f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
+##         m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
         
-    else:
-        #print('highpass')
-        f = [0, f1, f2, 0.999999, 1] #high pass
-        m = [0, 0.00003, 1, 1, 0]
+##     else:
+##         #print('highpass')
+##         f = [0, f1, f2, 0.999999, 1] #high pass
+##         m = [0, 0.00003, 1, 1, 0]
         
         
-    b = firwin2 (n_taps,f,m);
-    x = copy.copy(snd)
-    x = convolve(snd, b, 1)
-    #x[:, 1] = convolve(snd[:,1], b, 1)
+##     b = firwin2 (n_taps,f,m);
+##     #x = copy.copy(snd)
+##     x = fftconvolve(snd, b, 'same')
+##     #x[:, 1] = convolve(snd[:,1], b, 1)
     
-    return x
+##     return x
