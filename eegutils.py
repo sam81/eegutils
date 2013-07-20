@@ -41,21 +41,32 @@ def averageAverages(aveList, nSegments):
     """
     Perform a weighted average of a list of averages. The weight of
     each average in the list is determined by the number of segments
-    from which it was obtained.
+    from which it was obtained. 
     
     Parameters
     ----------
-    aveList : dict of list of 2D numpy arrays
+    aveList : list of dicts of 2D numpy arrays
         The list of averages for each experimental condition.
-    nSegments : dict of ints
-        The number of epochs on which each average is based 
+    nSegments : list of dicts of ints
+        The number of epochs on which each average is based.
 
     Returns
     ----------
-    weightedAve :
-        The
-    nSegsSum :
-        The
+    weightedAve : dict of 2D numpy arrays
+        The weighted averages for each condition.
+    nSegsSum : dict of ints
+        The number of epochs on which each weighted average is based.
+
+    Examples
+    ----------
+    >>> #simulate averages
+    >>> import numpy as np
+    >>> ave1 = {'cnd1': np.random.rand(4, 2048), 'cnd2': np.random.rand(4, 2048)}
+    >>> ave2 = {'cnd1': np.random.rand(4, 2048), 'cnd2': np.random.rand(4, 2048)}
+    >>> nSegs1 = {'cnd1': 196, 'cnd2': 200}
+    >>> nSegs2 = {'cnd1': 198, 'cnd2': 189}
+    >>> aveList = [ave1, ave2]; nSegments = [nSegs1, nSegs2]
+    >>> weightedAve, nSegsSum = averageAverages(aveList=aveList, nSegments=nSegments)
     """
     eventList = list(aveList[0].keys())
     nSegsSum = {}
@@ -66,7 +77,7 @@ def averageAverages(aveList, nSegments):
             nSegsSum[event] = nSegsSum[event] + nSegments[i][event]
 
     for event in eventList:
-        weightedAve[event] = numpy.zeros(aveList[0][event].shape)
+        weightedAve[event] = numpy.zeros(aveList[0][event].shape, dtype=aveList[0][eventList[0]].dtype)
         for i in range(len(aveList)):
            weightedAve[event] = weightedAve[event] + aveList[i][event] * (nSegments[i][event]/nSegsSum[event])
     
@@ -90,7 +101,7 @@ def averageEpochs(rec):
         
     Examples
     ----------
-    >>> ave, n_segs = average_epochs(rec=rec)
+    >>> ave, nSegs = averageEpochs(rec=rec)
     """
     
     eventList = list(rec.keys())
@@ -131,6 +142,7 @@ def baselineCorrect(rec, baselineStart, preDur, sampRate):
     eventList = list(rec.keys())
     epochStartSample = int(round(preDur*sampRate))
     baselineStartSample = int(epochStartSample - abs(round(baselineStart*sampRate)))
+
    
     for i in range(len(eventList)): #for each event
         for j in range(rec[str(eventList[i])].shape[2]): #for each epoch
@@ -148,7 +160,7 @@ def chainSegments(rec, nChunks, sampRate, start=None, end=None, baselineDur=0):
     """
     baseline_pnts = round(baselineDur * sampRate)
     startPnt = int(round(start*sampRate) + baseline_pnts) 
-    endPnt = int(round(end*sampRate) + baseline_pnts) 
+    endPnt = int(round(end*sampRate) + baseline_pnts)
     chunk_size = endPnt - startPnt
     sweep_size = chunk_size * nChunks
     nReps = {}
@@ -157,8 +169,8 @@ def chainSegments(rec, nChunks, sampRate, start=None, end=None, baselineDur=0):
     fromeegChainedAve = {}
     for i in range(len(eventList)):
         currCode = eventList[i]
-        eegChained[currCode] = zeros((rec[currCode].shape[0], sweep_size))  #two-dimensional array of zeros
-        fromeegChainedAve[currCode] = zeros((rec[currCode].shape[0], chunk_size))
+        eegChained[currCode] = zeros((rec[currCode].shape[0], sweep_size), dtype=rec[currCode].dtype)  #two-dimensional array of zeros
+        fromeegChainedAve[currCode] = zeros((rec[currCode].shape[0], chunk_size), dtype=rec[currCode].dtype)
         nReps[currCode] = zeros((nChunks))
         p = 0
         k = 0
@@ -247,10 +259,10 @@ def filterSegmented(rec, channels, sampRate, filterType, nTaps, cutoffs, transit
         channels = list(range(nChannels))
    
     if filterType == "lowpass":
-        f1 = cutoffs[0] * (1-transitionWidth)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / sampRate
-        f2 = (f2*2) / sampRate
+        f3 = cutoffs[0]
+        f4 = cutoffs[0] * (1+transitionWidth)
+        f3 = (f3*2) / sampRate
+        f4 = (f4*2) / sampRate
         f = [0, f3, f4, 1]
         m = [1, 1, 0.00003, 0]
     elif filterType == "highpass":
@@ -325,11 +337,12 @@ def filterContinuous(rec, channels, sampRate, filterType, nTaps, cutoffs, transi
         f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
         m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
     b = firwin2 (nTaps,f,m);
-
+    b = b.astype(rec.dtype)
+    #print(b[0:3])
     nChannels = rec.shape[0]
     if channels == None:
         channels = list(range(nChannels))
-   
+
     for i in range(nChannels):
         if i in channels:
             rec[i,:] = fftconvolve(rec[i,:], b, "same")
@@ -753,7 +766,7 @@ def segmentCnt(rec, eventTable, epochStart, epochEnd, sampRate, eventList=None):
     segs = {}
     for i in range(len(eventList)):
         idx = trigs_pos[numpy.where(trigs == eventList[i])[0]]
-        segs[str(eventList[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==eventList[i]])))
+        segs[str(eventList[i])] = numpy.zeros((rec.shape[0], nSamples, len(trigs[trigs==eventList[i]])), dtype=rec.dtype)
         for j in range(len(idx)):
             thisStartPnt = (idx[j]+epochStartSample)
             #print(thisStartPnt)
@@ -894,9 +907,9 @@ def getSpectrum(sig, sampRate, window, powerOfTwo):
         elif window == 'bartlett':
              w = bartlett(n)
         sig = sig*w
-        
+    #print(sig[0:2])
     p = fft(sig, nfft) # take the fourier transform 
-    nUniquePts = ceil((nfft+1)/2.0)
+    nUniquePts = ceil((nfft+1)/2)
     p = p[0:nUniquePts]
     p = abs(p)
     p = p / sampRate  # scale by the number of points so that
