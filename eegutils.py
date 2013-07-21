@@ -16,16 +16,16 @@
 #    along with eegutils.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-This module contains functions to extract and process event related potentials (ERPs) from
-electroencephalographic (EEG) recordings.
+This module contains functions to extract and process event related
+potentials (ERPs) from electroencephalographic (EEG) recordings.
 """
 
 from __future__ import division
 import copy, numpy
-from numpy import abs, append, arange, array, array_equal, convolve, ceil, floor, diff, mean, repeat, where, zeros
+from numpy import abs, append, arange, array, array_equal, convolve, ceil, diff, floor, log10, mean, repeat, where, zeros
 from numpy.fft import fft
 from scipy import signal
-from scipy.signal import firwin2, blackman, hamming, hanning, bartlett, fftconvolve
+from scipy.signal import bartlett, blackman, fftconvolve, firwin2, hamming, hanning
 import matplotlib.pyplot as plt
 import scipy.stats
 from pandas import DataFrame
@@ -120,24 +120,25 @@ def baselineCorrect(rec, baselineStart, preDur, sampRate):
 
     Parameters
     ----------
-    rec: dict of 3D arrays
+    rec : dict of 3D arrays
         The segmented recording.
-    baselineStart: float
+    baselineStart : float
         Start time of the baseline window relative to the event onset, in seconds.
         The absolute value of baselineStart cannot be greater than preDur.
         In practice baselineStart allows you to define a baseline window shorter
         than the time window before the experimental event (preDur).
-    preDur: float
+    preDur : float
         Duration of recording before the experimental event, in seconds.
-    sampRate: int
+    sampRate : int
         The samplig rate of the EEG recording.
-    
+
     Examples
     ----------
-    #baseline window has the same duration of preDur
+    >>> #baseline window has the same duration of preDur
     >>> baseline_correct(rec=rec, baselineStart=-0.2, preDur=0.2, sampRate=512)
-    #now with a baseline shorter than preDur
+    >>> #now with a baseline shorter than preDur
     >>> baseline_correct(rec=rec, baselineStart=-0.15, preDur=0.2, sampRate=512)
+
     """
     eventList = list(rec.keys())
     epochStartSample = int(round(preDur*sampRate))
@@ -157,6 +158,30 @@ def chainSegments(rec, nChunks, sampRate, start=None, end=None, baselineDur=0):
     into chunks of length nChunks
     baselineDur is for determining what is the zero point
     start and end are given with reference to the zero point
+
+    Parameters
+    ----------
+    rec : dict of 3D arrays
+        The segmented recordings for each experimental condition.
+    nChunks : int
+        The number of segments to chain together for each chunk.
+    sampRate : int
+        The EEG recording sampling rate.
+    start : float
+        Start time of the epoch segments to be chained, in seconds.
+    end : float
+        End time of the epoch segments to be chained, in seconds.
+    baselineDur : float
+        Duration of the baseline, in seconds.
+
+    Returns
+    ----------
+    eegChained : dict of 2D arrays
+        The chained recordings for each experimental condition.
+
+    Examples
+    ----------
+    >>> chainSegments(rec, nChunks=20, sampRate=2048, start=0, end=0.5, baselineDur=0.1)
     """
     baseline_pnts = round(baselineDur * sampRate)
     startPnt = int(round(start*sampRate) + baseline_pnts) 
@@ -197,17 +222,37 @@ def chainSegments(rec, nChunks, sampRate, start=None, end=None, baselineDur=0):
 
 
 
-def detrend(rec):
+def detrendEEG(rec):
     """
+    Remove the mean value from each channel of an EEG recording.
+
+    Parameters
+    ----------
+    rec : dict of 2D arrays
+        The EEG recording.
+
+    Examples
+    ----------
+    >>> detrend(rec)
     
     """
     nChannels = rec.shape[0]
     for i in range(nChannels):
-        rec[i,:] = rec[i,:] - numpy.mean(rec[i,:])
+        rec[i,:] = rec[i,:] - numpy.mean(rec[i,:], dtype=rec.dtype)
     return rec
 
 def detrendSegmented(rec):
     """
+    Remove the mean value from each channel of an EEG recording.
+
+    Parameters
+    ----------
+    rec : dict of 3D arrays
+        The segmented EEG recording.
+
+    Examples
+    ----------
+    >>> detrendSegmented(rec)
     
     """
     eventList = list(rec.keys())
@@ -219,6 +264,31 @@ def detrendSegmented(rec):
 
 
 def extractEventTable(trigChan, sampRate):
+    """
+    Extract the event table from the EEG channel containing the trigger codes.
+
+    Parameters
+    ----------
+    trigChan : array
+        The trigger channel.
+    sampRate : int
+        The EEG recording sampling rate.
+
+    Returns
+    ----------
+    eventTable : a dictionary with the following keys
+        - code : array of ints
+            The trigger codes.
+        - idx : array of ints
+            The indexes of the trigger codes.
+        - dur : array of floats
+            The duration of the triggers, in seconds.
+          
+    Examples
+    ----------
+    >>> evtTab = extractEventTable(trigChan, 2048)
+    
+    """
     trigst = copy.copy(trigChan)
     trigst[where(diff(trigst) == 0)[0]+1] = 0
     startPoints = where(trigst != 0)[0]
@@ -237,27 +307,95 @@ def extractEventTable(trigChan, sampRate):
     eventTable['dur'] = trigDurs
 
     return eventTable
-    
 
-def filterSegmented(rec, channels, sampRate, filterType, nTaps, cutoffs, transitionWidth):
+def getFilterFreqResp(sampRate, filterType, nTaps, cutoffs, transitionWidth, plotResp=False):
     """
-    
+    Get the frequency response of a eegutils filter.
+
     Parameters
     ----------
+    sampRate : int
+        The EEG recording sampling rate
+    filterType : string {lowpass, highpass, bandpass}
+        The filter type.
+    nTaps : int
+        The number of filter taps.
+    cutoffs : array of floats
+        The filter cutoffs. If 'filterType' is 'lowpass' or 'highpass'
+        the 'cutoffs' array should contain a single value. If 'filterType'
+        is bandpass the 'cutoffs' array should contain the lower and
+        the upper cutoffs in increasing order.
+    transitionWidth : float
+        The width of the filter transition region, normalized between 0-1.
+        For a lower cutoff the nominal transition region will go from
+        `(1-transitionWidth)*cutoff` to `cutoff`. For a higher cutoff
+        the nominal transition region will go from cutoff to
+        `(1+transitionWidth)*cutoff`.
+    plotResp : bool
+        Whether to plot the frequency response.
 
     Returns
     ----------
+    freq : array of floats
+        The frequency axis.
+    mag : array of floats
+        The frequency response of the filter. This is an array
+        of complex numbers, to get the real part use `abs(mag)`
 
     Examples
     ----------
+    >>>  f, m = getFilterFreqResp(2048, "highpass", 512, [30], 0.2)
     """
-    
-    eventList = list(rec.keys())
+    b = getFilterCoefficients(sampRate, filterType, nTaps, cutoffs, transitionWidth)
+    freq,mag = signal.freqz(b,1)
+    freq = (freq/max(freq))*(sampRate/2)
 
-    nChannels = rec[eventList[0]][0].shape[0]
-    if channels == None or len(channels) == 0:
-        channels = list(range(nChannels))
-   
+    if plotResp == True:
+        fig = plt.figure()
+        axes = fig.add_subplot(111)
+        axes.plot(freq, 20*log10(abs(mag)))
+        axes.set_xlabel('Frequency (Hz)')
+        axes.set_ylabel('Level (dB)')
+        plt.grid()
+        axes.set_title("# taps: " + str(nTaps) + " - trans. width: " + str(transitionWidth))
+        plt.show()
+
+    return freq, mag
+    
+def getFilterCoefficients(sampRate, filterType, nTaps, cutoffs, transitionWidth):
+    """
+    Get the coefficients of a FIR filter. This function is used internally by eegutils.
+
+    Parameters
+    ----------
+    sampRate : int
+        The EEG recording sampling rate.
+    filterType : str {'lowpass', 'highpass', 'bandpass'}
+        The filter type.
+    nTaps : int
+        The number of filter taps.
+    cutoffs : array of floats
+        The filter cutoffs. If 'filterType' is 'lowpass' or 'highpass'
+        the 'cutoffs' array should contain a single value. If 'filterType'
+        is bandpass the 'cutoffs' array should contain the lower and
+        the upper cutoffs in increasing order.
+    transitionWidth : float
+        The width of the filter transition region, normalized between 0-1.
+        For a lower cutoff the nominal transition region will go from
+        `(1-transitionWidth)*cutoff` to `cutoff`. For a higher cutoff
+        the nominal transition region will go from cutoff to
+        `(1+transitionWidth)*cutoff`.
+
+    Returns
+    ---------
+    filterCoeff : array of floats
+        The filter coefficients. 
+        
+    Examples
+    ----------
+    >>> getFilterCoefficients(sampRate=2048, filterType='highpass', nTaps=512, cutoffs=[30], transitionWidth=0.2)
+
+    """
     if filterType == "lowpass":
         f3 = cutoffs[0]
         f4 = cutoffs[0] * (1+transitionWidth)
@@ -283,13 +421,53 @@ def filterSegmented(rec, channels, sampRate, filterType, nTaps, cutoffs, transit
         f4 = (f4*2) / sampRate
         f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
         m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
-    b = firwin2 (nTaps,f,m);
-    ## w,h = signal.freqz(b,1)
-    ## h_dB = 20 * log10 (abs(h))
-    ## plt.plot((w/max(w))*(sampRate/2),h_dB)
-    ## plt.show()
-
+    filterCoeff = firwin2 (nTaps,f,m);
     
+    return filterCoeff
+
+def filterSegmented(rec, channels, sampRate, filterType, nTaps, cutoffs, transitionWidth):
+    """
+    Filter a segmented recording.
+    
+    Parameters
+    ----------
+    rec : dict of 3D arrays
+        The segmented EEG recording.
+    channels : array of ints
+        The list of channels that should be filtered.
+    sampRate : int
+        The EEG recording sampling rate.
+    filterType : str {'lowpass', 'highpass', 'bandpass'}
+        The filter type.
+    nTaps : int
+        The number of filter taps.
+    cutoffs : array of floats
+        The filter cutoffs. If 'filterType' is 'lowpass' or 'highpass'
+        the 'cutoffs' array should contain a single value. If 'filterType'
+        is bandpass the 'cutoffs' array should contain the lower and
+        the upper cutoffs in increasing order.
+    transitionWidth : float
+        The width of the filter transition region, normalized between 0-1.
+        For a lower cutoff the nominal transition region will go from
+        `(1-transitionWidth)*cutoff` to `cutoff`. For a higher cutoff
+        the nominal transition region will go from cutoff to
+        `(1+transitionWidth)*cutoff`.
+        
+    Examples
+    ----------
+    >>> filterSegmented(rec=rec, channels=[0,1,2,3], sampRate=2048, filterType='highpass', nTaps=512, cutoffs=[30], transitionWidth=0.2)
+    
+    """
+    
+    eventList = list(rec.keys())
+
+    nChannels = rec[eventList[0]][0].shape[0]
+    if channels == None or len(channels) == 0:
+        channels = list(range(nChannels))
+   
+
+    b = getFilterCoefficients(sampRate, filterType, nTaps, cutoffs, transitionWidth)
+    b = b.astype(rec[eventList[0]].dtype)
     for ev in eventList:
         for i in range(rec[ev].shape[2]): #for each epoch
             for j in range(rec[ev].shape[0]): #for each channel
@@ -300,45 +478,40 @@ def filterSegmented(rec, channels, sampRate, filterType, nTaps, cutoffs, transit
         
 def filterContinuous(rec, channels, sampRate, filterType, nTaps, cutoffs, transitionWidth):
     """
+    Filter a continuous recording.
     
     Parameters
     ----------
-
-    Returns
-    ----------
-
+    rec : 2D array
+        The nChannelsXnSamples array with the EEG recording.
+    channels : array of ints
+        The list of channels that should be filtered.
+    sampRate : int
+        The EEG recording sampling rate.
+    filterType : str {'lowpass', 'highpass', 'bandpass'}
+        The filter type.
+    nTaps : int
+        The number of filter taps.
+    cutoffs : array of floats
+        The filter cutoffs. If 'filterType' is 'lowpass' or 'highpass'
+        the 'cutoffs' array should contain a single value. If 'filterType'
+        is bandpass the 'cutoffs' array should contain the lower and
+        the upper cutoffs in increasing order.
+    transitionWidth : float
+        The width of the filter transition region, normalized between 0-1.
+        For a lower cutoff the nominal transition region will go from
+        `(1-transitionWidth)*cutoff` to `cutoff`. For a higher cutoff
+        the nominal transition region will go from cutoff to
+        `(1+transitionWidth)*cutoff`.
+        
     Examples
     ----------
+    >>> filterContinuous(rec=rec, channels=[0,1,2,3], sampRate=2048, filterType='highpass', nTaps=512, cutoffs=[30], transitionWidth=0.2)
+    
     """
        
-    if filterType == "lowpass":
-        f1 = cutoffs[0] * (1-transitionWidth)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / sampRate
-        f2 = (f2*2) / sampRate
-        f = [0, f3, f4, 1]
-        m = [1, 1, 0.00003, 0]
-    elif filterType == "highpass":
-        f1 = cutoffs[0] * (1-transitionWidth)
-        f2 = cutoffs[0]
-        f1 = (f1*2) / sampRate
-        f2 = (f2*2) / sampRate
-        f = [0, f1, f2, 0.999999, 1] #high pass
-        m = [0, 0.00003, 1, 1, 0]
-    elif filterType == "bandpass":
-        f1 = cutoffs[0] * (1-transitionWidth)
-        f2 = cutoffs[0]
-        f3 = cutoffs[1]
-        f4 = cutoffs[1] * (1+transitionWidth)
-        f1 = (f1*2) / sampRate
-        f2 = (f2*2) / sampRate
-        f3 = (f3*2) / sampRate
-        f4 = (f4*2) / sampRate
-        f = [0, f1, f2, ((f2+f3)/2), f3, f4, 1]
-        m = [0, 0.00003, 1, 1, 1, 0.00003, 0]
-    b = firwin2 (nTaps,f,m);
+    b = getFilterCoefficients(sampRate, filterType, nTaps, cutoffs, transitionWidth)
     b = b.astype(rec.dtype)
-    #print(b[0:3])
     nChannels = rec.shape[0]
     if channels == None:
         channels = list(range(nChannels))
@@ -356,17 +529,20 @@ def findArtefactThresh(rec, thresh=[100], channels=[0]):
     Parameters
     ----------
     rec : dict of 3D arrays
-        The segmented recording
-    thresh :
-        The threshold value.
+        The segmented recording.
+    thresh : array of floats
+        The threshold value for each channel listed in `channels`.
     channels = array or list of ints
-        The indexes of the channels on which to find artefacts.
+        The indexes of the channels to check for artefacts.
         
     Returns
     ----------
-
+    segsToReject : array of ints
+        The indexes of the epochs exceeding the threshold.
+        
     Examples
     ----------
+    >>> toRemove = eeg.findArtefactThresh(rec=segs, thresh=[100,60,100], channels=[0,1,2])
     """
     if len(channels) != len(thresh):
         print("The number of thresholds must be equal to the number of channels")
@@ -455,16 +631,21 @@ def getNoiseSidebands(components, nCompSide, nExcludeSide, FFTArray, otherExclud
 
 def mergeTriggersCnt(trigArray, trigList, newTrig):
     """
-    Take one or more triggers in trig_list, and substitute them with new_trig
+    Take one or more triggers in trigList, and substitute them with newTrig
 
     Parameters
     ----------
-
-    Returns
-    ----------
+    trigArray : array
+        The trigger channel.
+    trigList : array 
+        The list of triggers that should be substituted with `newTrig`
+    newTrig : 
+        The new trigger value.
 
     Examples
     ----------
+    >>> mergeTriggersCnt(trigArray, [1,2], 100)
+    
     """
     
     trigArray[numpy.in1d(trigArray, trigList)] = newTrig
@@ -556,11 +737,10 @@ def removeEpochs(rec, toRemove):
     to_remove : dict of 1D arrays
         List of epochs to remove for each condition
 
-    Returns
-    ----------
-
     Examples
     ----------
+    >>> removeEpochs(rec, toRemove)
+    
     """
     eventList = list(rec.keys())
     for code in eventList:
@@ -648,6 +828,9 @@ def removeEpochs(rec, toRemove):
 ##     return res_info
 
 def removeSpuriousTriggers(eventTable, sentTrigs, minTrigDur):
+    """
+    Remove from the eventTable triggers that were not actually sent.
+    """
     rec_trigs = eventTable['code']
     rec_trigs_dur = eventTable['dur']
     rec_trigs_start = eventTable['idx']
@@ -690,17 +873,13 @@ def rerefCnt(rec, refChannel, channels=None):
 
     Parameters
     ----------
-    rec : 
-        Recording
+    rec : array of floats
+        The nChannelsXnSamples array with the EEG data.
     refChannel: int
         The reference channel (indexing starts from zero).
     channels : list of ints
         List of channels to be rereferenced (indexing starts from zero).
   
-    Returns
-    -------
-    rec : an array of floats with dimenions nChannels X nDataPoints
-        
     Examples
     --------
     >>> rerefCnt(rec=dats, refChannel=4, channels=[1, 2, 3])
@@ -723,7 +902,7 @@ def segmentCnt(rec, eventTable, epochStart, epochEnd, sampRate, eventList=None):
     Parameters
     ----------
     rec: array of floats
-        The EEG data.
+        The nChannelsXnSamples array with the EEG data.
     eventTable : dict with the following keys
        - trigs : array of ints
            The list of triggers in the EEG recording.
@@ -739,7 +918,7 @@ def segmentCnt(rec, eventTable, epochStart, epochEnd, sampRate, eventList=None):
         The list of events for which epochs should be extracted.
         If no list is given epochs will be extracted for all the trigger
         codes present in the event table.
-    
+
     Returns
     ----------
     segs : dict of 3D arrays
@@ -752,6 +931,7 @@ def segmentCnt(rec, eventTable, epochStart, epochEnd, sampRate, eventList=None):
     Examples
     ----------
     >>>  segs, n_segs = eeg.segment_cnt(rec=dats, eventTable=evt_tab, epochStart=-0.2, epochEnd=0.8, sampRate=512, eventList=['200', '201'])
+    
     """
     trigs = eventTable['code']
     if eventList == None:
