@@ -22,7 +22,7 @@ potentials (ERPs) from electroencephalographic (EEG) recordings.
 
 from __future__ import division
 import copy, numpy
-from numpy import abs, append, arange, array, array_equal, convolve, ceil, diff, floor, log10, mean, repeat, where, zeros
+from numpy import abs, append, arange, array, array_equal, convolve, ceil, diff, floor, log2, log10, mean, repeat, where, zeros
 from numpy.fft import fft
 from scipy import signal
 from scipy.signal import bartlett, blackman, fftconvolve, firwin2, hamming, hanning
@@ -138,7 +138,6 @@ def baselineCorrect(rec, baselineStart, preDur, sampRate):
     >>> baseline_correct(rec=rec, baselineStart=-0.2, preDur=0.2, sampRate=512)
     >>> #now with a baseline shorter than preDur
     >>> baseline_correct(rec=rec, baselineStart=-0.15, preDur=0.2, sampRate=512)
-
     """
     eventList = list(rec.keys())
     epochStartSample = int(round(preDur*sampRate))
@@ -155,9 +154,10 @@ def baselineCorrect(rec, baselineStart, preDur, sampRate):
 def chainSegments(rec, nChunks, sampRate, start=None, end=None, baselineDur=0):
     """
     Take a dictionary containing in each key a list of segments, and chain these segments
-    into chunks of length nChunks
-    baselineDur is for determining what is the zero point
-    start and end are given with reference to the zero point
+    into chunks of length `nChunks`. `baselineDur` is for determining what is the zero point.
+    `start` and `end` are given with reference to the zero point.
+    This chaining technique is used to increase the spectral resolution of FFT analyses
+    of auditory steady-state responses.
 
     Parameters
     ----------
@@ -340,11 +340,11 @@ def getFilterFreqResp(sampRate, filterType, nTaps, cutoffs, transitionWidth, plo
         The frequency axis.
     mag : array of floats
         The frequency response of the filter. This is an array
-        of complex numbers, to get the real part use `abs(mag)`
+        of complex numbers, to get the real part use `abs(mag)`.
 
     Examples
     ----------
-    >>>  f, m = getFilterFreqResp(2048, "highpass", 512, [30], 0.2)
+    >>>  f, m = getFilterFreqResp(2048, 'highpass', 512, [30], 0.2)
     """
     b = getFilterCoefficients(sampRate, filterType, nTaps, cutoffs, transitionWidth)
     freq,mag = signal.freqz(b,1)
@@ -566,7 +566,34 @@ def findArtefactThresh(rec, thresh=[100], channels=[0]):
 
 def getFRatios(ffts, compIdx, nSideComp, nExcludedComp, otherExclude):
     """
-    Add excluded components
+    Compute signal to noise ratio from a fast fourier transform
+    and test its significance using an F-test.
+
+    Parameters
+    ----------
+    ffts : 
+        The 
+    compIdx : int
+        The positional index of the signal component.
+    nSideComp : int
+        The number of components adjacent to the signal component
+        from which to estimate the noise power.
+    nExcludedComp: int
+        The number of components to exclude from `nSideComp`
+    otherExclude : array of ints
+        The indexes of other components to exclude from the
+        computation of the noise side bands.
+
+    Returns
+    ----------
+    fftVals :
+        The
+    fRatio :
+        The
+        
+    Examples
+    ----------
+    >>>
     """
     cnds = ffts.keys()
     fftVals = {}
@@ -593,12 +620,35 @@ def getFRatios(ffts, compIdx, nSideComp, nExcludedComp, otherExclude):
 
 def getNoiseSidebands(components, nCompSide, nExcludeSide, FFTArray, otherExclude=None):
     """
-    the 2 has the possibility to exclude extra components, useful for distortion products
+    Compute 
+
+    Parameters
+    ----------
+    components : 
+        a list containing the indexes of the target components
+    nCompSide : int
+        The number of components used for each side band
+    nExcludeSide : int
+        The 
+    FFTArray: int
+        The array containing the fft values
+    otherExclude : array of ints
+        The indexes of other components to exclude from the
+        computation of the noise side bands.
+
+    Returns
+    ----------
+    noiseBands :
+        The
+        
+    Examples
+    ----------
+    >>>
     """
-    #components: a list containing the indexes of the target components
-    #nCompSide: number of components used for each side band
+   
+  
     #nExcludeSide: number of components adjacent to to the target components to exclude
-    #FFTArray: array containing the fft values
+    
     idxProtect = []; idxProtect.extend(components);
     if otherExclude != None:
         idxProtect.extend(otherExclude)
@@ -973,69 +1023,112 @@ def segmentCnt(rec, eventTable, epochStart, epochEnd, sampRate, eventList=None):
 #############
 def nextPowTwo(x):
     """
+    Compute the exponent of the closest power of two that is either equal
+    to `x` of bigger than `x`.
     
     Parameters
     ----------
-
+    x : numeric
+    
     Returns
     ----------
-
+    y : numeric
+    
     Examples
     ----------
+    >>> nextPowTwo(7)
+    >>> nextPowTwo(8)
+    
     """
     out = int(ceil(log2(x)))
     return out
 
-def getFFT(sig, sampRate, window, powerOfTwo):
-    """
+## def getFFT(sig, sampRate, window, powerOfTwo):
+##     """
+##     Compute the fast fourier transform of a 1-dimensional array.
     
-    Parameters
-    ----------
+##     Parameters
+##     ----------
 
-    Returns
-    ----------
+##     Returns
+##     ----------
 
-    Examples
-    ----------
-    """
-    n = len(sig)
-    if powerOfTwo == True:
-        nfft = 2**nextPowTwo(n)
-    else:
-        nfft = n
-    if window != 'none':
-        if window == 'hamming':
-             w = hamming(n)
-        elif window == 'hanning':
-             w = hanning(n)
-        elif window == 'blackman':
-             w = blackman(n)
-        elif window == 'bartlett':
-             w = bartlett(n)
-        sig = sig*w
+##     Examples
+##     ----------
+##     """
+##     n = len(sig)
+##     if powerOfTwo == True:
+##         nfft = 2**nextPowTwo(n)
+##     else:
+##         nfft = n
+##     if window != 'none':
+##         if window == 'hamming':
+##              w = hamming(n)
+##         elif window == 'hanning':
+##              w = hanning(n)
+##         elif window == 'blackman':
+##              w = blackman(n)
+##         elif window == 'bartlett':
+##              w = bartlett(n)
+##         sig = sig*w
         
-    p = fft(sig, nfft) # take the fourier transform 
-    nUniquePts = ceil((nfft+1)/2.0)
-    p = p[0:nUniquePts]
-    p = abs(p)
-    p = p / sampRate  # scale by the number of points so that
-    # the magnitude does not depend on the length 
-    # of the signal or on its sampling frequency  
-    #p = p**2  # square it to get the power 
+##     p = fft(sig, nfft) # take the fourier transform 
+##     nUniquePts = ceil((nfft+1)/2.0)
+##     p = p[0:nUniquePts]
+##     p = abs(p)
+##     p = p / sampRate  # scale by the number of points so that
+##     # the magnitude does not depend on the length 
+##     # of the signal or on its sampling frequency  
+##     #p = p**2  # square it to get the power 
 
-    # multiply by two (see technical document for details)
-    # odd nfft excludes Nyquist point
-    if nfft % 2 > 0: # we've got odd number of points fft
-         p[1:len(p)] = p[1:len(p)] * 2
-    else:
-         p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
+##     # multiply by two (see technical document for details)
+##     # odd nfft excludes Nyquist point
+##     if nfft % 2 > 0: # we've got odd number of points fft
+##          p[1:len(p)] = p[1:len(p)] * 2
+##     else:
+##          p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
 
-    freqArray = arange(0, nUniquePts, 1.0) * (sampRate / nfft);
-    x = {'freqArray': freqArray, 'mag':p}
-    return x
+##     freqArray = arange(0, nUniquePts, 1.0) * (sampRate / nfft);
+##     x = {'freqArray': freqArray, 'mag':p}
+##     return x
 
 def getSpectrogram(sig, sampRate, winLength, overlap, winType, powerOfTwo):
     """
+    Compute the spectrogram of a 1-dimensional array.
+    
+    Parameters
+    ----------
+    sig : array of floats
+        The signal of which the spectrum should be computed.
+    sampRate : int
+        The sampling rate of the signal.
+    winLength : float
+        The length of the window over which to take the FFTs.
+    overlap : float
+        The percent of overlap between successive windows (useful for smoothing the spectrogram).
+    winType : str {'hamming', 'hanning', blackman', 'bartlett', 'none'}
+        The type of window to apply to the signal before computing its FFT.
+        Choose 'none' if you don't want to apply any window.
+    powerOfTwo : bool
+        If `True` `sig` will be padded with zeros (if necessary) so that its length is a power of two.
+        
+    Returns
+    ----------
+    spectrogram : dict with the following keys
+                  - freq : array of floats
+                      The frequency axis.
+                  - time : array of floats
+                      The time axis.
+                  - mag : the power spectrum.
+
+    Examples
+    ----------
+    >>> sig = np.random.random(512)
+    >>> getSpectogram(sig, 256, 'hamming')
+    """
+    """
+    Compute the spectrogram of a 1-dimensional array.
+    
     winLength in seconds
     overlap in percent
     if the signal length is not a multiple of the window length it is trucated
@@ -1062,15 +1155,31 @@ def getSpectrogram(sig, sampRate, winLength, overlap, winType, powerOfTwo):
 
 def getSpectrum(sig, sampRate, window, powerOfTwo):
     """
+    Compute the power spectrum of a 1-dimensional array.
     
     Parameters
     ----------
-
+    sig : array of floats
+        The signal of which the spectrum should be computed.
+    sampRate : int
+        The sampling rate of the signal.
+    window : str {'hamming', 'hanning', blackman', 'bartlett', 'none'}
+        The type of window to apply to the signal before computing its FFT.
+        Choose 'none' if you don't want to apply any window.
+    powerOfTwo : bool
+        If `True` `sig` will be padded with zeros (if necessary) so that its length is a power of two.
+        
     Returns
     ----------
+    spectrum : dict with the following keys
+                  - freq : array of floats
+                      The FFT frequencies.
+                  - mag : the power spectrum.
 
     Examples
     ----------
+    >>> sig = np.random.random(512)
+    >>> getSpectrum(sig, 256, 'hamming')
     """
     n = len(sig)
     if powerOfTwo == True:

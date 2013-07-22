@@ -9,7 +9,7 @@ setup(name="eegutils",
     version="0.0.3",
       py_modules=["eegutils"],
       author="Samuele Carcagno",
-      author_email="sam.carcagno@google.com;",
+      author_email="sam.carcagno@gmail.com;",
       description="eegutils is a python library for processing electroencephalographic recordings.",
       long_description=\
       """
