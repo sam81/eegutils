@@ -36,7 +36,7 @@ except ImportError:
     pass
 import ctypes
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 def averageAverages(aveList, nSegments):
     """
@@ -1392,7 +1392,7 @@ def getSpectrogram(sig, sampRate, winLength, overlap, winType, powerOfTwo):
     power_matrix = zeros((len(freq_array), n))
     power_matrix[:,0] = p
     for i in range(1, n):
-        x = get_spectrum(sig[ind[i]:ind[i]+winLengthPnt], sampRate, winType, powerOfTwo)
+        x = getSpectrum(sig[ind[i]:ind[i]+winLengthPnt], sampRate, winType, powerOfTwo)
         freq_array = x['freq']; p = x['mag']
         power_matrix[:,i] = p
 
