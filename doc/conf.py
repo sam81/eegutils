@@ -31,7 +31,7 @@ class Mock(object):
         else:
             return Mock()
 
-MOCK_MODULES = ['_tkinter', 'matplotlib', 'matplotlib.pyplot']
+MOCK_MODULES = ['_tkinter', 'matplotlib', 'matplotlib.pyplot', 'pandas']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
 
