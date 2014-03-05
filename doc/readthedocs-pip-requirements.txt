@@ -1,7 +1,5 @@
 numpydoc>=0.4
 numpy>=1.6
-matplotlib>=1.1
-scipy>=0.9
-pandas>=0.9
+
 
 
