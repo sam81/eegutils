@@ -951,9 +951,12 @@ def mergeTriggersEventTable(eventTable, trigList, newTrig):
 def read_biosig(fileName):
     """
     Wrapper of biosig4python functions for reading Biosemi BDF files.
+
     Parameters
     ----------
-
+    fileName : string
+        Path of the BDF file to read
+    
     Returns
     ----------
 
