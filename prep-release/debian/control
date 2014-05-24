@@ -4,18 +4,19 @@ Priority: extra
 Maintainer: Samuele Carcagno <sam.carcagno@gmail.com>
 Build-Depends: debhelper (>= 8.0.0), 
 	       python3 (>= 3.1)
+X-Python-Version: >= 2.7
 X-Python3-Version: >= 3.1
 Standards-Version: 3.9.3
 Homepage: <insert the upstream URL, if relevant>
 #Vcs-Git: git://git.debian.org/collab-maint/pybdf.git
 #Vcs-Browser: http://git.debian.org/?p=collab-maint/pybdf.git;a=summary
 
-Package: eegutils
+Package: python3-eegutils
 Architecture: any
 Depends: ${python3:Depends}, 
 	 ${misc:Depends}, 
 	 ${shlibs:Depends},
-	 python3 (>= 3.2), 
+	 python3 (>= 3.1), 
 	 python3-numpy (>= 1:1.6.1),
 	 python3-scipy (>= 0.9)	
 Description: Python module for processing electroencephalographic recordings
